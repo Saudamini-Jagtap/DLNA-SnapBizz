@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:background="@color/bg_wx_middle"
+    android:orientation="vertical"
+    android:weightSum="1">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/titlebar" >
+
+        <TextView
+            android:id="@+id/dev_name_tv"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:ellipsize="end"
+            android:padding="5dp"
+            android:singleLine="true"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <ProgressBar
+            android:id="@+id/player_prepairing"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="30dip"
+            android:layout_height="30dip"
+            android:layout_alignParentRight="true"
+            android:layout_centerVertical="true"
+            android:layout_marginRight="20dip" />
+    </RelativeLayout>
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="485dip">
+    <ListView
+        android:id="@+id/content_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/bg_wx_middle"
+        android:divider="@null"
+        android:fastScrollEnabled="true"
+        android:listSelector="@drawable/list_view_selector"
+        android:layout_weight="4.66"
+        android:layout_alignParentTop="true">
+    </ListView>
+    </RelativeLayout>
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="47dp"
+        android:layout_gravity="bottom">
+        <Button
+            android:layout_width="100dp"
+            android:layout_height="50dp"
+            android:layout_centerHorizontal="true"
+            android:background="@drawable/titlebar"
+            android:id="@+id/update_Download"
+            android:text="UPDATE"
+            android:textColor="@color/white"
+            android:textSize="15dp" />
+
+    </RelativeLayout>
+
+</LinearLayout>

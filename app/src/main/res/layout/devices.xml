@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:background="@color/bg_wx_middle"
+    android:orientation="vertical" >
+
+    <LinearLayout
+        android:id="@+id/renderer_list_layout"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_weight="0.5"
+        android:orientation="vertical" >
+        <TextView
+            android:id="@+id/select_renderer_header"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/titlebar"
+            android:gravity="center_vertical"
+            android:padding="5dp"
+            android:text="@string/dmr_msg"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <ListView
+            android:id="@+id/renderer_list"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/bg_wx_middle"
+            android:divider="@null"
+            android:listSelector="@drawable/list_view_selector" />
+
+        <TextView
+            android:id="@+id/no_linn_ds"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="?android:textColorPrimary"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/media_server_list_layout"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_weight="0.5"
+        android:orientation="vertical" >
+
+        <TextView
+            android:id="@+id/select_library_header"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/titlebar"
+            android:gravity="center_vertical"
+            android:padding="5dp"
+            android:text="@string/device_msg"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <ListView
+            android:id="@+id/media_server_list"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/bg_wx_middle"
+            android:divider="@null"
+            android:listSelector="@drawable/list_view_selector" />
+
+        <TextView
+            android:id="@+id/no_library"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="?android:textColorPrimary"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/display_msg"
+        android:visibility="gone"
+        android:layout_marginBottom="10dp">
+    <ProgressBar
+        android:id="@+id/player_prepairing"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="30dip"
+        android:layout_height="30dip"
+        android:layout_marginLeft="20dp"
+        android:layout_centerVertical="true"
+        android:layout_marginRight="5dp"/>
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/text_msg"
+        android:text="Preaparing the server.Please wait..."
+        android:textColor="@color/black2"
+        android:gravity="center_horizontal"
+        android:textSize="20sp"/>
+    </LinearLayout>
+
+</LinearLayout>
