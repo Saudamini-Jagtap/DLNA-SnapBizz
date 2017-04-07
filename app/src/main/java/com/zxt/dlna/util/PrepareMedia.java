@@ -502,7 +502,7 @@ public class PrepareMedia {
             grabber.start();
             fgs.add(grabber);
 
-            FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 640, 480,grabber.getAudioChannels());
+            FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 640, 480,2);
             recorder.start();
             Frame frame;
 
