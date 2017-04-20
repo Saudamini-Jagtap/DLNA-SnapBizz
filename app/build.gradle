@@ -130,4 +130,5 @@ dependencies {
 //    compile 'org.jcodec:jcodec-android:0.1.9'
     // https://mvnrepository.com/artifact/com.googlecode.mp4parser/isoparser
     compile group: 'com.googlecode.mp4parser', name: 'isoparser', version: '1.0-RC-27'
+
 }

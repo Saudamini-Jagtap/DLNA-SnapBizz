@@ -9,7 +9,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.media.MediaMetadataRetriever;
-import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
@@ -19,10 +18,14 @@ import android.widget.Toast;
 
 import com.coremedia.iso.boxes.Container;
 import com.googlecode.mp4parser.authoring.Movie;
+import com.googlecode.mp4parser.authoring.Sample;
 import com.googlecode.mp4parser.authoring.Track;
+import com.googlecode.mp4parser.authoring.TrackMetaData;
 import com.googlecode.mp4parser.authoring.builder.DefaultMp4Builder;
+import com.googlecode.mp4parser.authoring.builder.FragmentedMp4Builder;
 import com.googlecode.mp4parser.authoring.container.mp4.MovieCreator;
 import com.googlecode.mp4parser.authoring.tracks.AppendTrack;
+import com.googlecode.mp4parser.authoring.tracks.CroppedTrack;
 import com.googlecode.mp4parser.boxes.apple.TrackEncodedPixelsDimensionsAtom;
 import com.zxt.dlna.activity.SettingActivity;
 import com.zxt.dlna.application.VisibilityEntry;
@@ -31,6 +34,7 @@ import com.zxt.dlna.dms.ContentTree;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.avcodec;
 import org.bytedeco.javacpp.opencv_core;
+import org.bytedeco.javacv.FFmpegFrameFilter;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
@@ -48,6 +52,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -115,17 +120,18 @@ public class PrepareMedia {
         if(!imageRoot.exists() || imageRoot.listFiles().length <=0 )
             prepareCampaignSlides(context);
         if(!videoRoot.exists() || videoRoot.listFiles().length <=0) {
-            record(context);
+            //record(context);
             prepareCampaignVideos();
         }
         if(!audioRoot.exists() || audioRoot.listFiles().length <=0)
             prepareCampaignAudios();
-        combineClips();
+        //combineClips();
+        multiply_videos();
     }
 
     public void updateMedia(Context context){
         prepareCampaignSlides(context);
-        record(context);
+        //record(context);
         prepareCampaignVideos();
         prepareCampaignAudios();
     }
@@ -388,15 +394,13 @@ public class PrepareMedia {
         }
         String video_output = videoRoot.getAbsolutePath().toString() + "/" + "CampaignSlideShow" + ".mp4";
         String path = Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay"; // You can provide SD Card path here.
-
         deleteVideofromGallery(video_output, context);
-
         File folder = new File(path);
-
         File[] listOfFiles = folder.listFiles();
         opencv_core.IplImage iplimage = null;
-        FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(video_output, 640,480);
+        FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270,720,2);
         OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
+
 
         if (listOfFiles.length > 0) {
             try {
@@ -410,139 +414,168 @@ public class PrepareMedia {
                 int slideTime = SettingActivity.getSlideTime(mContext);
                 int numbOfRepeat = MAX_DURATION__OF_VIDEO/(listOfFiles.length*slideTime);
                 recorder.start();
+                long startTime = System.currentTimeMillis();
 //                for(int k=0;k<numbOfRepeat;k++){
-                for(int k=0;k<3;k++){
-                    for (int j = 0; j < listOfFiles.length; j++) {
-                        String files = "";
-                        if (listOfFiles[j].isFile()) {
-                            files = listOfFiles[j].getName();
-                            System.out.println(" j " + j + listOfFiles[j]);
-                        }
-                        String[] tokens = files.split("\\.(?=[^\\.]+$)");
-                        String name = tokens[0];
-                        opencv_core.IplImage iplImage = cvLoadImage(Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay/" + name + ".jpeg");
-                        Frame slideFrame = imgToFrame.convert(iplImage);
-                        for (int i = 0; i < slideTime; i++)
-                            recorder.record(slideFrame);
-                        cvReleaseImage(iplImage);
-                        iplImage.release();
+                //for(int k=0;k<3;k++){
+
+                for (int j = 0; j < listOfFiles.length; j++ ) {
+                    String files = "";
+                    if (listOfFiles[j].isFile()) {
+                        files = listOfFiles[j].getName();
+                        System.out.println(" j " + j + listOfFiles[j]);
                     }
+                    String[] tokens = files.split("\\.(?=[^\\.]+$)");
+                    String name = tokens[0];
+                    opencv_core.IplImage iplImage = cvLoadImage(Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay/" + name + ".jpeg");
+                    Frame slideFrame = imgToFrame.convert(iplImage);
+                    //for (int i = 0; i < slideTime*25; i++) {
+                    long time = 12500L * (System.currentTimeMillis() - startTime);
+                    if (time > recorder.getTimestamp()) {
+                        recorder.setTimestamp(time);
+                        recorder.record(slideFrame);
+                    }
+                    //}
+                    cvReleaseImage(iplImage);
+                    iplImage.release();
                 }
+                //}
                 recorder.stop();
                 recorder.release();
                 addVideoToGallery(video_output, "CampaignSlideShow", context);
-                } catch (FFmpegFrameRecorder.Exception e) {
-                    e.printStackTrace();
-                    System.out.println(e);
-                    Toast.makeText(context,"Cannot create the video. Please try again later.",Toast.LENGTH_SHORT);
-                }finally {
-                    System.gc();
-                    Pointer.deallocateReferences();
-                }
+            } catch (FFmpegFrameRecorder.Exception e) {
+                e.printStackTrace();
+                System.out.println(e);
+                Toast.makeText(context,"Cannot create the video. Please try again later.",Toast.LENGTH_SHORT);
+            }finally {
+                System.gc();
+                Pointer.deallocateReferences();
             }
-     }
-
-    public void merge() {
-        try {
-            String path = videoRoot.getAbsolutePath().toString();
-            String video_output = videoRoot.getAbsolutePath().toString() + "/" + "CombinedVideo" + ".mp4";
-            File folder = new File(path);
-            File[] listOfFiles = folder.listFiles();
-
-            FrameGrabber grabber1 = new FFmpegFrameGrabber(listOfFiles[0].getAbsolutePath().toString());
-            grabber1.start();
-            FrameGrabber grabber2 = new FFmpegFrameGrabber(listOfFiles[1].getAbsolutePath().toString());
-            double frameRate = grabber2.getFrameRate();
-            grabber2.start();
-            int audioChannles = grabber2.getAudioChannels();
-            FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(video_output, 640, 480,2);
-            recorder.setFrameRate(grabber2.getFrameRate());
-            recorder.setSampleFormat(grabber2.getSampleFormat());
-            recorder.setSampleRate(grabber2.getSampleRate());
-            recorder.start();
-            Frame frame;
-            int j = 0;
-            while ((frame = grabber1.grabFrame()) != null) {
-                j++;
-                recorder.record(frame);
-            }
-            double i =0;
-
-            while ((frame = grabber2.grabFrame()) != null) {
-                i++;
-                recorder.record(frame);
-            }
-            recorder.stop();
-            grabber2.stop();
-            grabber1.stop();
-        }catch (Exception e ){
-            e.printStackTrace();
         }
     }
 
     protected void combineClips(){
         try{
-            String path = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
-            String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "VIDEO_COMBINED_TEST.mp4";
-            File[]  listOfFiles= new File(path.toString()).listFiles(); // You can provide SD Card path here.
-            if(listOfFiles.length <= 1)
+            String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
+            String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
+            File[]  listOfVideoFiles= new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
+            if(listOfVideoFiles.length < 1)
                 return;
+            //removing the audio
+            for(int i=0;i<listOfVideoFiles.length;i++) {
+                Movie videoMovie = MovieCreator.build(listOfVideoFiles[i].getAbsolutePath());
+                Movie output = new Movie();
+                for (Track t : videoMovie.getTracks()) {
+
+                    if (t.getHandler().equals("vide")) {
+                        output.addTrack(new AppendTrack(t));
+                    }
+
+                    if (t.getHandler().equals("soun")) {
+                        output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 50)));
+                    }
+                }
+
+                Container out = new DefaultMp4Builder().build(output);
+                FileChannel fc = new RandomAccessFile((listOfVideoFiles[i].getAbsolutePath()), "rw").getChannel();
+                out.writeContainer(fc);
+                fc.close();
+            }
 
             List<FrameGrabber> fgs = new ArrayList<FrameGrabber>();
-            for(File f : listOfFiles)
+            for(File f : listOfVideoFiles)
             {
                 FrameGrabber grabber = new FFmpegFrameGrabber(f);
                 grabber.start();
                 fgs.add(grabber);
             }
+            String path = Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay"; // You can provide SD Card path here.
+            File folder = new File(path);
+            File[] listOfFiles = folder.listFiles();
+            OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
 
-            //created campaign video
-            File convertedSlides = new File(videoRoot.getAbsolutePath().toString() + "/CampaignSlideShow.mp4");
-            FrameGrabber grabber = new FFmpegFrameGrabber(convertedSlides);
-            grabber.start();
-            fgs.add(grabber);
-
-            FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 640, 480,2);
+            //slidestoVideo
+            int slideTime = SettingActivity.getSlideTime(mContext);
+            FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270, 720,2);
+            recorder.setVideoCodec(13);
+            recorder.setFormat("mp4");//
+            //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
+            recorder.setFrameRate(25); // This is the frame rate for video. If you really want to have good video quality you need to provide large set of images.
+            recorder.setPixelFormat(0); // PIX_FMT_YUV420P
             recorder.start();
             Frame frame;
-
             for(FrameGrabber fg : fgs)
             {
                 while ((frame = fg.grabFrame()) != null) {
                     recorder.record(frame);
                 }
+
                 fg.stop();
             }
-            long timeStamp = recorder.getTimestamp();
+            long startTime = System.currentTimeMillis();
+            for (int j = 0; j < listOfFiles.length; j++ ) {
+                opencv_core.IplImage iplImage = cvLoadImage(listOfFiles[j].getAbsolutePath());
+                Frame slideFrame = imgToFrame.convert(iplImage);
+                //for (int i = 0; i < slideTime*25; i++) {
+                long time = 12500L * (System.currentTimeMillis() - startTime);
+                if (time > recorder.getTimestamp()) {
+                    recorder.setTimestamp(time);
+                    recorder.record(slideFrame);
+                }
+                //}
+                cvReleaseImage(iplImage);
+                iplImage.release();
+            }
             recorder.stop();
             recorder.release();
 
-            Movie inMovie = MovieCreator.build(video_output);
-            Movie output = new Movie();
-            List<Track> videoTracks = new LinkedList<Track>();
-            for (Track t : inMovie.getTracks()) {
-                for(int i=0;i<=3;i++) {
-                    if (t.getHandler().equals("vide")) {
-                        videoTracks.add(t);
-                    }
-                }
-            }
-            if (videoTracks.size() > 0) {
-                output.addTrack(new AppendTrack(videoTracks.toArray(new Track[videoTracks.size()])));
-            }
-
-            Container out = new DefaultMp4Builder().build(output);
-
-            FileChannel fc = new RandomAccessFile(String.format(videoRoot.getPath()+"/output.mp4"), "rw").getChannel();
-            out.writeContainer(fc);
-            fc.close();
-
-            //addVideoToGallery(video_output, "VIDEO_COMBINED_TEST", mContext);
+//            //addVideoToGallery(video_output, "VIDEO_COMBINED_TEST", mContext);
         }
         catch(Exception ex)
         {
             ex.printStackTrace();
         }
+    }
+    void multiply_videos(){
+        String path = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
+        File[]  listOfFiles= new File(path.toString()).listFiles(); // You can provide SD Card path here.
+        if(listOfFiles.length < 1)
+            return;
+        try{
+            Movie output = new Movie();
+            List<Track> videoTracks = new LinkedList<Track>();
+            List<Track> audioTracks = new LinkedList<Track>();
+
+            //for(int i=0;i<listOfFiles.length;i++) {
+            for (int i=0;i<12;i++) {
+                Movie videoMovie = MovieCreator.build(listOfFiles[0].getAbsolutePath());
+                for (Track t : videoMovie.getTracks()) {
+                    if (t.getHandler().equals("vide")) {
+                        videoTracks.add(t);
+                    }
+                    if (t.getHandler().equals("soun")) {
+                        audioTracks.add(t);
+                    }
+                }
+            }
+            //}
+            if (videoTracks.size() > 0) {
+                output.addTrack(new AppendTrack(videoTracks.toArray(new Track[videoTracks.size()])));
+            }
+            if (audioTracks.size() > 0) {
+                output.addTrack(new AppendTrack(audioTracks.toArray(new Track[audioTracks.size()])));
+            }
+
+            Container out = new DefaultMp4Builder().build(output);
+
+            FileChannel fc = new RandomAccessFile(String.format(videoRoot.getPath()+"/final.mp4"), "rw").getChannel();
+            out.writeContainer(fc);
+            fc.close();
+
+        }
+        catch(IOException ex){
+           ex.printStackTrace();
+        }
+//
     }
 
     /*adding the campaign slides to the mediastore // updating the media store*/
@@ -613,7 +646,7 @@ public class PrepareMedia {
 
     /*adding the campaign slides to the mediastore // updating the media store*/
     public void addImageToGallery(final String filePath, final String fileName, final long fileSize, final Context context) {
-     File file = new File(filePath);
+        File file = new File(filePath);
         if(!file.exists()){
             try {
                 file.createNewFile();
@@ -678,4 +711,3 @@ public class PrepareMedia {
         //TODO:fetch the campaign audios
     }
 }
-

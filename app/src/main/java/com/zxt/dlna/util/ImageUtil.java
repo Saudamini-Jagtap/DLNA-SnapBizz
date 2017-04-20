@@ -114,8 +114,7 @@ public class ImageUtil {
 		if (Integer.valueOf(android.os.Build.VERSION.SDK) < 8) {
 			android.media.MediaMetadataRetriever retriever = new android.media.MediaMetadataRetriever();
 			try {
-				retriever
-						.setMode(android.media.MediaMetadataRetriever.MODE_CAPTURE_FRAME_ONLY);
+				retriever.setMode(android.media.MediaMetadataRetriever.MODE_CAPTURE_FRAME_ONLY);
 				retriever.setDataSource(videoAbsPath);
 				bitmap = retriever.captureFrame();
 			} catch (IllegalArgumentException ex) {
