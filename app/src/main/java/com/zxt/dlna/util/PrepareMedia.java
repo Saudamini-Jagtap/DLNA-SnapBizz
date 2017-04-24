@@ -121,12 +121,14 @@ public class PrepareMedia {
             prepareCampaignSlides(context);
         if(!videoRoot.exists() || videoRoot.listFiles().length <=0) {
             //record(context);
+            combineClips();
+            append_videos(context);
             prepareCampaignVideos();
         }
         if(!audioRoot.exists() || audioRoot.listFiles().length <=0)
             prepareCampaignAudios();
         //combineClips();
-        multiply_videos();
+        //multiply_videos();
     }
 
     public void updateMedia(Context context){
@@ -453,7 +455,8 @@ public class PrepareMedia {
         }
     }
 
-    protected void combineClips(){
+    /*Combining the compaign videos and campaign slides all together in one video */
+    public void combineClips(){
         try{
             String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
             String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
@@ -493,7 +496,7 @@ public class PrepareMedia {
             File[] listOfFiles = folder.listFiles();
             OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
 
-            //slidestoVideo
+            //slidesToVideo
             int slideTime = SettingActivity.getSlideTime(mContext);
             FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270, 720,2);
             recorder.setVideoCodec(13);
@@ -515,39 +518,38 @@ public class PrepareMedia {
             for (int j = 0; j < listOfFiles.length; j++ ) {
                 opencv_core.IplImage iplImage = cvLoadImage(listOfFiles[j].getAbsolutePath());
                 Frame slideFrame = imgToFrame.convert(iplImage);
-                //for (int i = 0; i < slideTime*25; i++) {
                 long time = 12500L * (System.currentTimeMillis() - startTime);
                 if (time > recorder.getTimestamp()) {
                     recorder.setTimestamp(time);
                     recorder.record(slideFrame);
                 }
-                //}
                 cvReleaseImage(iplImage);
                 iplImage.release();
             }
             recorder.stop();
             recorder.release();
-
-//            //addVideoToGallery(video_output, "VIDEO_COMBINED_TEST", mContext);
         }
         catch(Exception ex)
         {
             ex.printStackTrace();
         }
     }
-    void multiply_videos(){
-        String path = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
-        File[]  listOfFiles= new File(path.toString()).listFiles(); // You can provide SD Card path here.
-        if(listOfFiles.length < 1)
+
+    /* Creating a longre duration video
+    after combining the campaign slides and campaign videos
+     */
+    public void append_videos(Context context){
+        String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
+        File output_video = new File(video_output);
+        if(!output_video.exists())
             return;
         try{
             Movie output = new Movie();
             List<Track> videoTracks = new LinkedList<Track>();
             List<Track> audioTracks = new LinkedList<Track>();
 
-            //for(int i=0;i<listOfFiles.length;i++) {
             for (int i=0;i<12;i++) {
-                Movie videoMovie = MovieCreator.build(listOfFiles[0].getAbsolutePath());
+                Movie videoMovie = MovieCreator.build(output_video.getAbsolutePath());
                 for (Track t : videoMovie.getTracks()) {
                     if (t.getHandler().equals("vide")) {
                         videoTracks.add(t);
@@ -557,7 +559,6 @@ public class PrepareMedia {
                     }
                 }
             }
-            //}
             if (videoTracks.size() > 0) {
                 output.addTrack(new AppendTrack(videoTracks.toArray(new Track[videoTracks.size()])));
             }
@@ -571,14 +572,16 @@ public class PrepareMedia {
             out.writeContainer(fc);
             fc.close();
 
+            addVideoToGallery(video_output, "CAMPAIGN-VIDEO-FINAL", context);
+
         }
         catch(IOException ex){
            ex.printStackTrace();
         }
-//
     }
 
-    /*adding the campaign slides to the mediastore // updating the media store*/
+    /*adding the campaign slides to the mediastore //
+     updating the media store*/
     public void addVideoToGallery(final String filePath, final String fileName, /*final long fileSize,*/ final Context context) {
         File file = new File(filePath);
         if(!file.exists()){
@@ -615,7 +618,8 @@ public class PrepareMedia {
         }
     }
 
-    /*adding the campaign slides to the mediastore // updating the media store*/
+    /*adding the campaign slides to the mediastore //
+     updating the media store*/
     public void deleteVideofromGallery(String filePath, final Context context) {
         File file = new File(filePath);
         if(file.exists()) {
@@ -644,7 +648,8 @@ public class PrepareMedia {
         }
     }
 
-    /*adding the campaign slides to the mediastore // updating the media store*/
+    /*adding the campaign slides to the mediastore //
+    updating the media store*/
     public void addImageToGallery(final String filePath, final String fileName, final long fileSize, final Context context) {
         File file = new File(filePath);
         if(!file.exists()){
@@ -665,7 +670,8 @@ public class PrepareMedia {
         context.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
     }
 
-    /*adding             the campaign slides to the mediastore // updating the media store*/
+    /*adding the campaign slides to the mediastore //
+    updating the media store*/
     public void deleteImagefromGallery(final File filePath, final Context context) {
 
         if(filePath.exists()) {
