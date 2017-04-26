@@ -8,40 +8,37 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
-import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.provider.MediaStore;
 import android.util.DisplayMetrics;
-import android.util.Log;
+import android.view.View;
 import android.widget.Toast;
 
 import com.coremedia.iso.boxes.Container;
 import com.googlecode.mp4parser.authoring.Movie;
-import com.googlecode.mp4parser.authoring.Sample;
 import com.googlecode.mp4parser.authoring.Track;
-import com.googlecode.mp4parser.authoring.TrackMetaData;
 import com.googlecode.mp4parser.authoring.builder.DefaultMp4Builder;
-import com.googlecode.mp4parser.authoring.builder.FragmentedMp4Builder;
 import com.googlecode.mp4parser.authoring.container.mp4.MovieCreator;
 import com.googlecode.mp4parser.authoring.tracks.AppendTrack;
 import com.googlecode.mp4parser.authoring.tracks.CroppedTrack;
-import com.googlecode.mp4parser.boxes.apple.TrackEncodedPixelsDimensionsAtom;
+
+import com.zxt.dlna.activity.DevicesActivity;
 import com.zxt.dlna.activity.SettingActivity;
 import com.zxt.dlna.application.VisibilityEntry;
 import com.zxt.dlna.dms.ContentTree;
 
 import org.bytedeco.javacpp.Pointer;
-import org.bytedeco.javacpp.avcodec;
 import org.bytedeco.javacpp.opencv_core;
-import org.bytedeco.javacv.FFmpegFrameFilter;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.FrameGrabber;
 import org.bytedeco.javacv.FrameRecorder;
 import org.bytedeco.javacv.OpenCVFrameConverter;
-import org.eclipse.jetty.util.IO;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -52,7 +49,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -74,15 +70,24 @@ public class PrepareMedia {
     // 30min = 1800sec for 48 slides
     // 1hr = 3600sec
 
+    protected static final int CAMPAIGN_DATA_READY = 5000;
+
     private int mMaxWidth;
     private int mMaxHeight;
     private DisplayMetrics metrics;
 
-
-    //delaration of the visibilityEntry class
+    /**
+     * declaration of the visibilityEntry class
+     **/
     private static VisibilityEntry visibleCampaignEntry;
+    private boolean campaignSlidesReady = false;
+    private boolean campaignVideosReady = false;
+    private boolean campaignAudiosReady = false;
 
-    //constants
+
+    /**
+     * constants
+     **/
     protected final int MAX_NUM_SLIDES = 48;
     protected final int MAX_NUM_MYSTORE_SLIDES = 1;
     protected final int MAX_NUM_CAMPAIGN_SLIDES = 40;
@@ -91,14 +96,17 @@ public class PrepareMedia {
     protected final int LOCAL_PRODUCT_IMAGE_TYPE = 2;
     protected final int MYSTORE_IMAGE_TYPE = 3;
 
-    //variables
+    /**
+     * variables
+     **/
     private int mNumberOfImages = 0;
     private int mNumberOfBrandCampaignImages = 0;
     private int mNumberOfLocalOfferImages = 0;
     private int mNumberOfMyStoreImages = 0;
 
-
-    //replaced by Snapbilling database images
+    /**
+     * replaced by Snap-billing database images
+     **/
     private List<VisibilityEntry> mAllCampaignImageList = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> mBrandCampaignImageList = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> mLocalOffersImageList = new ArrayList<VisibilityEntry>();
@@ -106,42 +114,124 @@ public class PrepareMedia {
     private List<VisibilityEntry> mLocalCampaignSlides = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> campaignSlides = new ArrayList<VisibilityEntry>();
 
-    //directory of the campaign slides to be shown
+    private Context mContext;
+
+    /**
+     * directory of the campaign slides to be shown
+     **/
     public static final File imageRoot = new File(Environment.getExternalStorageDirectory(), "campaignSlidesToDisplay");
 
-    //directory of the campaign videos to be shown
+    /**
+     * directory of the campaign videos to be shown
+     **/
     public static final File videoRoot = new File(Environment.getExternalStorageDirectory(), "campaignVideosToDisplay");
 
-    //directory of the campaign music to be shown
+    /**
+     * directory of the campaign music to be shown
+     **/
     public static final File audioRoot = new File(Environment.getExternalStorageDirectory(), "campaignAudiosToDisplay");
-    //Constructor
-    public void createMedia(Context context){
 
-        if(!imageRoot.exists() || imageRoot.listFiles().length <=0 )
-            prepareCampaignSlides(context);
-        if(!videoRoot.exists() || videoRoot.listFiles().length <=0) {
-            //record(context);
-            combineClips();
-            append_videos(context);
-            prepareCampaignVideos();
+    /**
+     * constructor
+     **/
+    public PrepareMedia(Context context){
+        this.mContext = context;
+    }
+
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case CAMPAIGN_DATA_READY:
+                    if (campaignSlidesReady && campaignVideosReady /*&& campaignAudiosReady*/) {
+                        combineClipsAndVideos();
+                        append_videos(mContext);
+                        campaignSlidesReady = false;
+                        campaignVideosReady = false;
+                        campaignAudiosReady = false;
+                    }
+                    break;
+            }
         }
-        if(!audioRoot.exists() || audioRoot.listFiles().length <=0)
-            prepareCampaignAudios();
-        //combineClips();
-        //multiply_videos();
+    };
+
+    /**
+     * Constructor
+     **/
+    public void createMedia(){
+        if(!imageRoot.exists() || imageRoot.listFiles().length <=0 )
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    prepareCampaignSlides(mContext);
+                    campaignSlidesReady = true;
+                    mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+                }
+
+            }).start();
+
+        if(!videoRoot.exists() || videoRoot.listFiles().length <=0) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    prepareCampaignVideos();
+                    campaignVideosReady = true;
+                    mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+                }
+
+            }).start();
+        }
+        if(!audioRoot.exists() || audioRoot.listFiles().length <=0) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    prepareCampaignAudios();
+                    campaignAudiosReady = true;
+                    //TODO: uncomment when audio is required
+                    //mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+                }
+            }).start();
+        }
     }
 
-    public void updateMedia(Context context){
-        prepareCampaignSlides(context);
-        //record(context);
-        prepareCampaignVideos();
-        prepareCampaignAudios();
+    /**
+     * use this method whenever update needed
+     **/
+    public void updateMedia(){
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                prepareCampaignSlides(mContext);
+                campaignSlidesReady = true;
+                mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+            }
+
+        }).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                prepareCampaignVideos();
+                campaignVideosReady = true;
+                mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+            }
+
+        }).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                prepareCampaignAudios();
+                campaignAudiosReady = true;
+                //TODO: uncomment when audio is required
+                //mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+            }
+
+        }).start();
     }
 
-    /* fetching the campaign images from snapbilling application
+    /** fetching the campaign images from snapbilling application
      * and preparing the slides for the slide show
      * and saving the slides to device storage
-     */
+     **/
     public void prepareCampaignSlides(Context context) {
         visibleCampaignEntry = new VisibilityEntry();
         //campaign images from the database
@@ -151,11 +241,11 @@ public class PrepareMedia {
         saveCampaignSlides(campaignSlides, context);
     }
 
-    /*sort the images into 3 categories :
-    *	1. campaign images
-    *	2. local images
-    *	3. myStore images
-    */
+    /** sort the images into 3 categories :
+     *	1. campaign images
+     *	2. local images
+     *	3. myStore images
+     **/
     private void sortCampaignImages(List<VisibilityEntry> allImages) {
         for (VisibilityEntry data : allImages) {
             switch (data.getCampaignType()) {
@@ -172,15 +262,14 @@ public class PrepareMedia {
         }
     }
 
-    /* preparing the slideshow for the campaigning
-    *
-    *  	Number of slides: 48
-    *  	Campaign Slides: 40 full screen slides
-    *	Local Slides: 8 (2 images/slide ) – if there are less than 40 campaign slides it can be replaced with local slides.
-    *	My Store Page: 1 full screen slide
-    *
-    */
-
+    /** preparing the slideshow for the campaigning
+     *
+     * 	Number of slides: 48
+     * 	Campaign Slides: 40 full screen slides
+     *	Local Slides: 8 (2 images/slide ) – if there are less than 40 campaign slides it can be replaced with local slides.
+     *	My Store Page: 1 full screen slide
+     *
+     **/
     public List<VisibilityEntry> prepareSlides() {
         List<VisibilityEntry> preaparedSlides = new ArrayList<VisibilityEntry>();
         if (mMyStoreImageList.size() >= 1) {
@@ -195,9 +284,7 @@ public class PrepareMedia {
         for (int i = 0; i < mNumberOfBrandCampaignImages; i++) {
             preaparedSlides.add(resizeImages(mBrandCampaignImageList.get(i), BRAND_CAMPAIGN_IMAGE_TYPE, mBrandCampaignImageList.get(i).getImageID()));
         }
-
         mLocalCampaignSlides = mergeLocalCampaignImages(mLocalOffersImageList);
-
         for (VisibilityEntry temp : mLocalCampaignSlides) {
             if (preaparedSlides.size() < MAX_NUM_SLIDES) {
                 preaparedSlides.add(temp);
@@ -206,6 +293,9 @@ public class PrepareMedia {
         return preaparedSlides;
     }
 
+    /**
+     * resize the resolution of the slide images if not at required
+     **/
     public VisibilityEntry resizeImages(VisibilityEntry images, int imageType, int id) {
         Bitmap firstImage = BitmapFactory.decodeFile(images.getImagePath());
         int canvasWidth = MAX_IMAGE_WIDHT;
@@ -215,7 +305,9 @@ public class PrepareMedia {
 
     }
 
-    /*creating a local slides list*/
+    /**
+     * creating a local slides list
+     **/
     public List<VisibilityEntry> mergeLocalCampaignImages(List<VisibilityEntry> localOfferImagesList) {
         List<VisibilityEntry> mergedImageList = new ArrayList<VisibilityEntry>();
         int i = 0;
@@ -224,20 +316,17 @@ public class PrepareMedia {
         mNumberOfLocalOfferImages = localOfferImagesList.size();
         if (mNumberOfLocalOfferImages % 2 != 0)
             oddImageCount = true;
-
         for (i = 0; i < mNumberOfLocalOfferImages; i += 2) {
             if ((oddImageCount == true) && (i == 0)) {
                 mergedImageList.add(resizeImages(localOfferImagesList.get(i), LOCAL_PRODUCT_IMAGE_TYPE, localOfferImagesList.get(i).getImageID()));
                 i += 1;
             }
-
             VisibilityEntry first = localOfferImagesList.get(i);
             VisibilityEntry second = localOfferImagesList.get((i + 1));
             Bitmap firstImage = BitmapFactory.decodeFile(first.getImagePath());
             Bitmap secondImage = BitmapFactory.decodeFile(second.getImagePath());
             Bitmap mergedImages = createSingleImageFrom2Images(firstImage, secondImage);
             mergedImageList.add(new VisibilityEntry(convertBitmaptoSlide(mergedImages, i).getAbsolutePath(), LOCAL_PRODUCT_IMAGE_TYPE, r.nextInt(200)));
-
         }
 
         return mergedImageList;
@@ -249,7 +338,9 @@ public class PrepareMedia {
         return metrics;
     }
 
-    /* merge two local images into single bitmap image */
+    /**
+     * merge two local images into single bitmap image
+     **/
     private Bitmap createSingleImageFrom2Images(Bitmap firstImage, Bitmap secondImage) {
         int canvasWidth = MAX_IMAGE_WIDHT;
         int canvasHeight = MAX_IMAGE_HEIGHT;
@@ -296,7 +387,9 @@ public class PrepareMedia {
         return result;
     }
 
-    /*converting image formed by merging two local images into slide/file */
+    /**
+     * converting image formed by merging two local images into slide/file
+     **/
     public File convertBitmaptoSlide(Bitmap image, int slideNo) {
         String root = Environment.getExternalStorageDirectory().getAbsolutePath() + "/";
         final String tempMergedDirName = "mergedImages";
@@ -331,7 +424,9 @@ public class PrepareMedia {
         return f;
     }
 
-    /*saving all the campaign slides/files into the device storage*/
+    /**
+     * saving all the campaign slides/files into the device storage
+     **/
     public void saveCampaignSlides(List<VisibilityEntry> slides, Context context) {
         int i = 0;
         String root = Environment.getExternalStorageDirectory().getAbsolutePath() + "/";
@@ -455,34 +550,16 @@ public class PrepareMedia {
         }
     }
 
-    /*Combining the compaign videos and campaign slides all together in one video */
-    public void combineClips(){
+    /**
+     * Combining the campaign videos and campaign slides all together in one video
+     **/
+    public void combineClipsAndVideos(){
         try{
             String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
             String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
             File[]  listOfVideoFiles= new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
             if(listOfVideoFiles.length < 1)
                 return;
-            //removing the audio
-            for(int i=0;i<listOfVideoFiles.length;i++) {
-                Movie videoMovie = MovieCreator.build(listOfVideoFiles[i].getAbsolutePath());
-                Movie output = new Movie();
-                for (Track t : videoMovie.getTracks()) {
-
-                    if (t.getHandler().equals("vide")) {
-                        output.addTrack(new AppendTrack(t));
-                    }
-
-                    if (t.getHandler().equals("soun")) {
-                        output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 50)));
-                    }
-                }
-
-                Container out = new DefaultMp4Builder().build(output);
-                FileChannel fc = new RandomAccessFile((listOfVideoFiles[i].getAbsolutePath()), "rw").getChannel();
-                out.writeContainer(fc);
-                fc.close();
-            }
 
             List<FrameGrabber> fgs = new ArrayList<FrameGrabber>();
             for(File f : listOfVideoFiles)
@@ -500,7 +577,7 @@ public class PrepareMedia {
             int slideTime = SettingActivity.getSlideTime(mContext);
             FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270, 720,2);
             recorder.setVideoCodec(13);
-            recorder.setFormat("mp4");//
+            recorder.setFormat("mp4");
             //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
             recorder.setFrameRate(25); // This is the frame rate for video. If you really want to have good video quality you need to provide large set of images.
             recorder.setPixelFormat(0); // PIX_FMT_YUV420P
@@ -511,7 +588,6 @@ public class PrepareMedia {
                 while ((frame = fg.grabFrame()) != null) {
                     recorder.record(frame);
                 }
-
                 fg.stop();
             }
             long startTime = System.currentTimeMillis();
@@ -528,16 +604,15 @@ public class PrepareMedia {
             }
             recorder.stop();
             recorder.release();
-        }
-        catch(Exception ex)
-        {
+        } catch(Exception ex) {
             ex.printStackTrace();
         }
     }
 
-    /* Creating a longre duration video
-    after combining the campaign slides and campaign videos
-     */
+    /**
+     *  Creating a longer duration video
+     *  after combining the campaign slides and campaign videos
+     **/
     public void append_videos(Context context){
         String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
         File output_video = new File(video_output);
@@ -547,7 +622,6 @@ public class PrepareMedia {
             Movie output = new Movie();
             List<Track> videoTracks = new LinkedList<Track>();
             List<Track> audioTracks = new LinkedList<Track>();
-
             for (int i=0;i<12;i++) {
                 Movie videoMovie = MovieCreator.build(output_video.getAbsolutePath());
                 for (Track t : videoMovie.getTracks()) {
@@ -565,23 +639,23 @@ public class PrepareMedia {
             if (audioTracks.size() > 0) {
                 output.addTrack(new AppendTrack(audioTracks.toArray(new Track[audioTracks.size()])));
             }
-
             Container out = new DefaultMp4Builder().build(output);
-
             FileChannel fc = new RandomAccessFile(String.format(videoRoot.getPath()+"/final.mp4"), "rw").getChannel();
             out.writeContainer(fc);
             fc.close();
 
+            // adding to the application directory
             addVideoToGallery(video_output, "CAMPAIGN-VIDEO-FINAL", context);
-
         }
         catch(IOException ex){
            ex.printStackTrace();
         }
     }
 
-    /*adding the campaign slides to the mediastore //
-     updating the media store*/
+    /**
+     * adding the campaign slides to the media-store //
+     * updating the media store
+     **/
     public void addVideoToGallery(final String filePath, final String fileName, /*final long fileSize,*/ final Context context) {
         File file = new File(filePath);
         if(!file.exists()){
@@ -605,6 +679,9 @@ public class PrepareMedia {
         createThumbnail(filePath,id);
     }
 
+    /**
+     * create a thumbnail for the given image
+     **/
     public void createThumbnail(String filePath, String id){
         Bitmap videoThumb = ImageUtil.getThumbnailForVideo(filePath
                 .toString());
@@ -618,8 +695,10 @@ public class PrepareMedia {
         }
     }
 
-    /*adding the campaign slides to the mediastore //
-     updating the media store*/
+    /**
+     * adding the campaign slides to the media-store //
+     * updating the media-store
+     **/
     public void deleteVideofromGallery(String filePath, final Context context) {
         File file = new File(filePath);
         if(file.exists()) {
@@ -648,8 +727,10 @@ public class PrepareMedia {
         }
     }
 
-    /*adding the campaign slides to the mediastore //
-    updating the media store*/
+    /**
+     * adding the campaign slides to the media-store //
+     * updating the media-store
+     **/
     public void addImageToGallery(final String filePath, final String fileName, final long fileSize, final Context context) {
         File file = new File(filePath);
         if(!file.exists()){
@@ -670,8 +751,10 @@ public class PrepareMedia {
         context.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
     }
 
-    /*adding the campaign slides to the mediastore //
-    updating the media store*/
+    /**
+     * adding the campaign slides to the media-store //
+     * updating the media-store
+     **/
     public void deleteImagefromGallery(final File filePath, final Context context) {
 
         if(filePath.exists()) {
@@ -700,16 +783,46 @@ public class PrepareMedia {
         }
     }
 
-    /* fetching the campaign videos from database
+    /**
+     * fetching the campaign videos from database
      * preparing the campaign videos to be shown
-     */
+     **/
     public void prepareCampaignVideos() {
         //TODO:fetch the campaign videos
+        try {
+            String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
+            File[] listOfVideoFiles = new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
+            if (listOfVideoFiles.length < 1)
+                return;
+            //removing the audio
+            for (int i = 0; i < listOfVideoFiles.length; i++) {
+                Movie videoMovie = MovieCreator.build(listOfVideoFiles[i].getAbsolutePath());
+                Movie output = new Movie();
+                for (Track t : videoMovie.getTracks()) {
+
+                    if (t.getHandler().equals("vide")) {
+                        output.addTrack(new AppendTrack(t));
+                    }
+
+                    if (t.getHandler().equals("soun")) {
+                        output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 50)));
+                    }
+                }
+                Container out = new DefaultMp4Builder().build(output);
+                FileChannel fc = new RandomAccessFile((listOfVideoFiles[i].getAbsolutePath()), "rw").getChannel();
+                out.writeContainer(fc);
+                fc.close();
+            }
+        }
+        catch (Exception ex){
+            ex.printStackTrace();
+        }
     }
 
-    /* fetching the campaign audios from database
+    /**
+     * fetching the campaign audios from database
      * preparing the campaign audios to be shown
-     */
+     **/
     public void prepareCampaignAudios() {
         if(!audioRoot.exists()){
             audioRoot.mkdir();
