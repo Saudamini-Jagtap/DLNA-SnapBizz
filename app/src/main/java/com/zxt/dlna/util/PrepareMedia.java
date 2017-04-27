@@ -11,11 +11,9 @@ import android.graphics.Canvas;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.provider.MediaStore;
 import android.util.DisplayMetrics;
-import android.view.View;
 import android.widget.Toast;
 
 import com.coremedia.iso.boxes.Container;
@@ -26,7 +24,6 @@ import com.googlecode.mp4parser.authoring.container.mp4.MovieCreator;
 import com.googlecode.mp4parser.authoring.tracks.AppendTrack;
 import com.googlecode.mp4parser.authoring.tracks.CroppedTrack;
 
-import com.zxt.dlna.activity.DevicesActivity;
 import com.zxt.dlna.activity.SettingActivity;
 import com.zxt.dlna.application.VisibilityEntry;
 import com.zxt.dlna.dms.ContentTree;
@@ -53,7 +50,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
-import static com.zxt.dlna.application.BaseApplication.mContext;
 import static org.bytedeco.javacpp.opencv_core.cvReleaseImage;
 import static org.bytedeco.javacpp.opencv_imgcodecs.cvLoadImage;
 
@@ -113,6 +109,7 @@ public class PrepareMedia {
     private List<VisibilityEntry> mMyStoreImageList = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> mLocalCampaignSlides = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> campaignSlides = new ArrayList<VisibilityEntry>();
+    private List<VisibilityEntry> mCampaignVideos = new ArrayList<VisibilityEntry>();
 
     private Context mContext;
 
@@ -159,6 +156,9 @@ public class PrepareMedia {
      * Constructor
      **/
     public void createMedia(){
+
+        visibleCampaignEntry = new VisibilityEntry();
+
         if(!imageRoot.exists() || imageRoot.listFiles().length <=0 )
             new Thread(new Runnable() {
                 @Override
@@ -167,7 +167,6 @@ public class PrepareMedia {
                     campaignSlidesReady = true;
                     mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
                 }
-
             }).start();
 
         if(!videoRoot.exists() || videoRoot.listFiles().length <=0) {
@@ -178,7 +177,6 @@ public class PrepareMedia {
                     campaignVideosReady = true;
                     mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
                 }
-
             }).start();
         }
         if(!audioRoot.exists() || audioRoot.listFiles().length <=0) {
@@ -205,7 +203,6 @@ public class PrepareMedia {
                 campaignSlidesReady = true;
                 mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
             }
-
         }).start();
         new Thread(new Runnable() {
             @Override
@@ -214,7 +211,6 @@ public class PrepareMedia {
                 campaignVideosReady = true;
                 mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
             }
-
         }).start();
         new Thread(new Runnable() {
             @Override
@@ -224,7 +220,6 @@ public class PrepareMedia {
                 //TODO: uncomment when audio is required
                 //mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
             }
-
         }).start();
     }
 
@@ -233,9 +228,8 @@ public class PrepareMedia {
      * and saving the slides to device storage
      **/
     public void prepareCampaignSlides(Context context) {
-        visibleCampaignEntry = new VisibilityEntry();
         //campaign images from the database
-        mAllCampaignImageList = visibleCampaignEntry.getAllCampaignImages();
+        mAllCampaignImageList = visibleCampaignEntry.getAllCampaignData();
         sortCampaignImages(mAllCampaignImageList);
         campaignSlides = prepareSlides();
         saveCampaignSlides(campaignSlides, context);
@@ -302,7 +296,6 @@ public class PrepareMedia {
         int canvasHeight = MAX_IMAGE_HEIGHT;
         Bitmap nre = Bitmap.createScaledBitmap(firstImage, canvasWidth, canvasHeight, false);
         return (new VisibilityEntry(convertBitmaptoSlide(nre, id).getAbsolutePath(), imageType, id));
-
     }
 
     /**
@@ -328,7 +321,6 @@ public class PrepareMedia {
             Bitmap mergedImages = createSingleImageFrom2Images(firstImage, secondImage);
             mergedImageList.add(new VisibilityEntry(convertBitmaptoSlide(mergedImages, i).getAbsolutePath(), LOCAL_PRODUCT_IMAGE_TYPE, r.nextInt(200)));
         }
-
         return mergedImageList;
     }
 
@@ -472,15 +464,7 @@ public class PrepareMedia {
         }
 
         CommonUtil.deleteRecursive(new File(root + "mergedImages"));
-        mAllCampaignImageList = null;
-        mBrandCampaignImageList = null;
-        mLocalOffersImageList = null;
-        mBrandCampaignImageList = null;
-        mMyStoreImageList = null;
-        mLocalCampaignSlides = null;
-
-
-        //remove when images imported from the Snapbilling application
+        //remove when images imported from the Snap-billing application
         //deleteRecursive(new File(root + "campaignImages"));
     }
 
@@ -498,12 +482,10 @@ public class PrepareMedia {
         FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270,720,2);
         OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
 
-
         if (listOfFiles.length > 0) {
             try {
-                //recorder.setVideoCodec(13); // CODEC_ID_MPEG4 //CODEC_ID_MPEG1VIDEO
-                recorder.setVideoCodec(13);
-                recorder.setFormat("mp4");//
+                recorder.setVideoCodec(13);// CODEC_ID_MPEG4 //CODEC_ID_MPEG1VIDEO
+                recorder.setFormat("mp4");
                 //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
                 recorder.setFrameRate(25); // This is the frame rate for video. If you really want to have good video quality you need to provide large set of images.
                 recorder.setPixelFormat(0); // PIX_FMT_YUV420P
@@ -512,9 +494,6 @@ public class PrepareMedia {
                 int numbOfRepeat = MAX_DURATION__OF_VIDEO/(listOfFiles.length*slideTime);
                 recorder.start();
                 long startTime = System.currentTimeMillis();
-//                for(int k=0;k<numbOfRepeat;k++){
-                //for(int k=0;k<3;k++){
-
                 for (int j = 0; j < listOfFiles.length; j++ ) {
                     String files = "";
                     if (listOfFiles[j].isFile()) {
@@ -535,7 +514,6 @@ public class PrepareMedia {
                     cvReleaseImage(iplImage);
                     iplImage.release();
                 }
-                //}
                 recorder.stop();
                 recorder.release();
                 addVideoToGallery(video_output, "CampaignSlideShow", context);
@@ -557,7 +535,7 @@ public class PrepareMedia {
         try{
             String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
             String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
-            File[]  listOfVideoFiles= new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
+            File[] listOfVideoFiles= new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
             if(listOfVideoFiles.length < 1)
                 return;
 
@@ -648,7 +626,7 @@ public class PrepareMedia {
             addVideoToGallery(video_output, "CAMPAIGN-VIDEO-FINAL", context);
         }
         catch(IOException ex){
-           ex.printStackTrace();
+            ex.printStackTrace();
         }
     }
 
