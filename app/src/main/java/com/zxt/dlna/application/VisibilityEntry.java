@@ -3,7 +3,6 @@ package com.zxt.dlna.application;
 import android.os.Environment;
 
 import java.io.File;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
@@ -16,21 +15,23 @@ import java.util.Random;
 
 public class VisibilityEntry {
     //class members
-    public int _id;
-    public String _imagepath;
-    public int _campaignType;//1-Campaign 2-LocalProduct 3-MyStore
-    public Date _startDateTime;//can be null
-    public Date _endDateTime;//can be null
-    public Integer _price;//price in paisa, can be null
-    public Integer _discount;//Discount in paisa, can be null
-    public String _productName;//can be null
-    public String _offerMessage;//can be null
+    private int _id;
+    private String _dataPath;
+    private int _campaignType;//1-Campaign 2-LocalProduct 3-MyStore 4-Video
+    private int _slotNumber; //selected slot number
+    private int _nSlots; //Number of slots required for video
+    private Date _startDateTime;//can be null
+    private Date _endDateTime;//can be null
+    private Integer _price;//price in paisa, can be null
+    private Integer _discount;//Discount in paisa, can be null
+    private String _productName;//can be null
+    private String _offerMessage;//can be null
 
     // Empty constructor
     public VisibilityEntry(){};
     //constructor
-    public VisibilityEntry(String imagePath, int campaignType){
-        this._imagepath = imagePath;
+    public VisibilityEntry(String dataPath, int campaignType){
+        this._dataPath = dataPath;
         this._campaignType = campaignType;
         this._startDateTime = null;
         this._endDateTime = null;
@@ -38,11 +39,12 @@ public class VisibilityEntry {
         this._discount = null;
         this._productName = null;
         this._offerMessage = null;
+        this._slotNumber = 0;
+        this._nSlots =0;
     }
     //constructor
-    public VisibilityEntry(String imagePath, int campaignType, int id){
-        this._id = id;
-        this._imagepath = imagePath;
+    public VisibilityEntry(String dataPath, int campaignType, int slot, int numberofSlots){
+        this._dataPath = dataPath;
         this._campaignType = campaignType;
         this._startDateTime = null;
         this._endDateTime = null;
@@ -50,15 +52,38 @@ public class VisibilityEntry {
         this._discount = null;
         this._productName = null;
         this._offerMessage = null;
+        this._slotNumber = slot;
+        this._nSlots = numberofSlots;
     }
-
+    //constructor
+    public VisibilityEntry(String dataPath, int campaignType, int id){
+        this._id = id;
+        this._dataPath = dataPath;
+        this._campaignType = campaignType;
+        this._startDateTime = null;
+        this._endDateTime = null;
+        this._price = null;
+        this._discount = null;
+        this._productName = null;
+        this._offerMessage = null;
+        this._slotNumber = 0;
+        this._nSlots =0;
+    }
     //setting imagePath
-    public void setImagePath(String imagePath) {
-        this._imagepath = imagePath;
+    public void setCampaignDataPath(String dataPath) {
+        this._dataPath = dataPath;
     }
     //setting campaign type
     public void setCampaignType(int campaignType) {
         this._campaignType = campaignType;
+    }
+    //setting the slot
+    public void setSlotNumber(int slotNumber) {
+        this._slotNumber = slotNumber;
+    }
+    //setting number of slots occupied by the video
+    public void setNumberofSlots(int numberOfSlots) {
+        this._nSlots = numberOfSlots;
     }
     //setting startDateTime
     public void setStartDateTime(Date startDateTime) {
@@ -85,17 +110,25 @@ public class VisibilityEntry {
         this._offerMessage = offerMessage;
     }
 
-    public void setImageID(int id){this._id = id;}
+    public void setcampaignID(int id){this._id = id;}
 
     //geting imageID
-    public int getImageID(){return this._id;}
+    public int getCampaignID(){return this._id;}
     //getting imagePath
-    public String getImagePath() {
-        return this._imagepath;
+    public String getCampaignDataPath() {
+        return this._dataPath;
     }
     //getting campaign type
     public int getCampaignType() {
         return this._campaignType;
+    }
+    //setting the slot
+    public int getSlotNumber() {
+        return this._slotNumber;
+    }
+    //setting number of slots occupied by the video
+    public int getNumberOfSlots() {
+        return this._nSlots;
     }
     //getting startDateTime
     public Date getStartDateTime() {
@@ -122,60 +155,52 @@ public class VisibilityEntry {
         return this._offerMessage;
     }
 
-    public List<VisibilityEntry> getAllCampaignImages(){
-        List<VisibilityEntry> allCampaignImages =new ArrayList<VisibilityEntry>();
-
+    public List<VisibilityEntry> getAllCampaignData(){
+        List<VisibilityEntry> allCampaignData =new ArrayList<VisibilityEntry>();
         //TODO: write a function to fetch images from Snapbilling database
         //remove when importing from the Snapbilling application
         //remove start
         Random r = new Random();
         File folder = new File(Environment.getExternalStorageDirectory() +
-                File.separator + "campaignImages");
+                File.separator + "campaignData");
         if (!folder.exists()) {
             folder.mkdirs();
         }
         //fetching the images from the local storage
-        //replace below with the logic to fetch fromt the snapbilling application
+        //replace below with the logic to fetch from the snapbilling application
         if (folder.listFiles().length > 0) {
             int i=0;
             for (File file : folder.listFiles()) {
                 VisibilityEntry campaignData = new VisibilityEntry();
-                campaignData.setImageID((int) r.nextInt(1000));
+                campaignData.setcampaignID(r.nextInt(1000));
+                campaignData.setSlotNumber(r.nextInt(41));
                 try {
-                    campaignData.setImagePath(file.getCanonicalPath());
+                    campaignData.setCampaignDataPath(file.getCanonicalPath());
                 }
                 catch (IOException e){
-
+                    e.printStackTrace();
                 }
-                if(i< 39) {
-                    campaignData.setCampaignType(1);
-                }else if(i==39){
-                    campaignData.setCampaignType(3);
-                }else{
-                    campaignData.setCampaignType(2);
+                if(file.getName().endsWith(".mp4")){
+                    campaignData.setCampaignType(4);
+                }
+                else {
+                    if (i < 5) {
+                        campaignData.setCampaignType(1);
+
+                    } else if (i == 39) {
+                        campaignData.setCampaignType(3);
+                    } else {
+                        campaignData.setCampaignType(2);
+                    }
                 }
                 i++;
                 campaignData.setProductName(file.getName());
                 // Adding each image to campaignImagesList
-                allCampaignImages.add(campaignData);
+                allCampaignData.add(campaignData);
             }
         }
         //remove end
-        return allCampaignImages;
-    }
-
-    public int getNumberOfSlides(List<VisibilityEntry>allImages){
-        int slideCount = 0;
-        //logic to count the number of slides
-        return slideCount;
-    }
-
-    /**
-     * Class to filter files which are having image file extension
-     * */
-    class FileExtensionFilter implements FilenameFilter {
-        public boolean accept(File dir, String name) {
-            return (name.endsWith(".png") || name.endsWith(".jpg"));
-        }
+        return allCampaignData;
     }
 }
+

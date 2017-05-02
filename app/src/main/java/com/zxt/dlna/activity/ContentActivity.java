@@ -648,8 +648,8 @@ public class ContentActivity extends Activity {
 
 	private void prepareMediaServer() {
 		//TODO: uncomment for final
-		PrepareMedia mediaData = new PrepareMedia();
-		mediaData.updateMedia(ContentActivity.this);
+		PrepareMedia mediaData = new PrepareMedia(ContentActivity.this);
+		mediaData.updateMedia();
 		ContentTree.delete();
 		ContentNode rootNode = ContentTree.getRootNode();
 		// Video Container

@@ -589,8 +589,8 @@ public class DevicesActivity extends Activity {
 
 	private void prepareMediaServer() {
 
-			PrepareMedia mediaData = new PrepareMedia();
-			mediaData.createMedia(DevicesActivity.this);
+			PrepareMedia mediaData = new PrepareMedia(DevicesActivity.this);
+			mediaData.createMedia();
 			ContentNode rootNode = ContentTree.getRootNode();
 			// Video Container
 			Container videoContainer = new Container();

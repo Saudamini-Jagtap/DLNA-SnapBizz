@@ -12,7 +12,6 @@ public class Constants {
         public static String STARTFOREGROUND_ACTION = "com.zxt.dlna.service.MediaService.action.startforeground";
         public static String STOPFOREGROUND_ACTION = "com.zxt.dlna.service.MediaService.action.stopforeground";
     }
-
     public interface NOTIFICATION_ID {
         public static int FOREGROUND_SERVICE = 101;
     }

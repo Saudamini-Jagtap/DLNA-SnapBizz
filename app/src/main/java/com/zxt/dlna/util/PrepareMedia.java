@@ -46,6 +46,8 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -88,9 +90,11 @@ public class PrepareMedia {
     protected final int MAX_NUM_MYSTORE_SLIDES = 1;
     protected final int MAX_NUM_CAMPAIGN_SLIDES = 40;
     protected final int MAX_NUM_LOCAL_SLIDES = 8;
+
     protected final int BRAND_CAMPAIGN_IMAGE_TYPE = 1;
     protected final int LOCAL_PRODUCT_IMAGE_TYPE = 2;
     protected final int MYSTORE_IMAGE_TYPE = 3;
+    protected final int CAMPAIGN_VIDEO_TYPE = 4;
 
     /**
      * variables
@@ -103,13 +107,13 @@ public class PrepareMedia {
     /**
      * replaced by Snap-billing database images
      **/
-    private List<VisibilityEntry> mAllCampaignImageList = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> mBrandCampaignImageList = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> mLocalOffersImageList = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> mMyStoreImageList = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> mLocalCampaignSlides = new ArrayList<VisibilityEntry>();
-    private List<VisibilityEntry> campaignSlides = new ArrayList<VisibilityEntry>();
+    private List<VisibilityEntry> mCampaignSlides = new ArrayList<VisibilityEntry>();
     private List<VisibilityEntry> mCampaignVideos = new ArrayList<VisibilityEntry>();
+    private List<VisibilityEntry> mFinalCampaignToBeDisplayed = new ArrayList<VisibilityEntry>();
 
     private Context mContext;
 
@@ -158,6 +162,9 @@ public class PrepareMedia {
     public void createMedia(){
 
         visibleCampaignEntry = new VisibilityEntry();
+        List<VisibilityEntry> mAllCampaignDataList = new ArrayList<VisibilityEntry>();
+        mAllCampaignDataList =  visibleCampaignEntry.getAllCampaignData();
+        sortCampaignData(mAllCampaignDataList);
 
         if(!imageRoot.exists() || imageRoot.listFiles().length <=0 )
             new Thread(new Runnable() {
@@ -196,6 +203,10 @@ public class PrepareMedia {
      * use this method whenever update needed
      **/
     public void updateMedia(){
+
+        List<VisibilityEntry> mAllCampaignDataList = visibleCampaignEntry.getAllCampaignData();
+        sortCampaignData(mAllCampaignDataList);
+
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -229,10 +240,8 @@ public class PrepareMedia {
      **/
     public void prepareCampaignSlides(Context context) {
         //campaign images from the database
-        mAllCampaignImageList = visibleCampaignEntry.getAllCampaignData();
-        sortCampaignImages(mAllCampaignImageList);
-        campaignSlides = prepareSlides();
-        saveCampaignSlides(campaignSlides, context);
+        mCampaignSlides = prepareSlides();
+        //saveCampaignSlides(mCampaignSlides, context);
     }
 
     /** sort the images into 3 categories :
@@ -240,7 +249,7 @@ public class PrepareMedia {
      *	2. local images
      *	3. myStore images
      **/
-    private void sortCampaignImages(List<VisibilityEntry> allImages) {
+    private void sortCampaignData(List<VisibilityEntry> allImages) {
         for (VisibilityEntry data : allImages) {
             switch (data.getCampaignType()) {
                 case BRAND_CAMPAIGN_IMAGE_TYPE:
@@ -252,6 +261,8 @@ public class PrepareMedia {
                 case MYSTORE_IMAGE_TYPE:
                     mMyStoreImageList.add(data);
                     break;
+                case CAMPAIGN_VIDEO_TYPE:
+                    mCampaignVideos.add(data);
             }
         }
     }
@@ -267,7 +278,7 @@ public class PrepareMedia {
     public List<VisibilityEntry> prepareSlides() {
         List<VisibilityEntry> preaparedSlides = new ArrayList<VisibilityEntry>();
         if (mMyStoreImageList.size() >= 1) {
-            preaparedSlides.add(resizeImages(mMyStoreImageList.get(0), MYSTORE_IMAGE_TYPE, mMyStoreImageList.get(0).getImageID()));
+            preaparedSlides.add(resizeImages(mMyStoreImageList.get(0)));
             mNumberOfMyStoreImages = 1;
             mNumberOfBrandCampaignImages = (mBrandCampaignImageList.size() >= (MAX_NUM_CAMPAIGN_SLIDES - 1)) ? (MAX_NUM_CAMPAIGN_SLIDES - 1) : mBrandCampaignImageList.size();
         } else {
@@ -276,7 +287,7 @@ public class PrepareMedia {
 
         }
         for (int i = 0; i < mNumberOfBrandCampaignImages; i++) {
-            preaparedSlides.add(resizeImages(mBrandCampaignImageList.get(i), BRAND_CAMPAIGN_IMAGE_TYPE, mBrandCampaignImageList.get(i).getImageID()));
+            preaparedSlides.add(resizeImages(mBrandCampaignImageList.get(i)));
         }
         mLocalCampaignSlides = mergeLocalCampaignImages(mLocalOffersImageList);
         for (VisibilityEntry temp : mLocalCampaignSlides) {
@@ -290,12 +301,12 @@ public class PrepareMedia {
     /**
      * resize the resolution of the slide images if not at required
      **/
-    public VisibilityEntry resizeImages(VisibilityEntry images, int imageType, int id) {
-        Bitmap firstImage = BitmapFactory.decodeFile(images.getImagePath());
+    public VisibilityEntry resizeImages(VisibilityEntry images) {
+        Bitmap firstImage = BitmapFactory.decodeFile(images.getCampaignDataPath());
         int canvasWidth = MAX_IMAGE_WIDHT;
         int canvasHeight = MAX_IMAGE_HEIGHT;
         Bitmap nre = Bitmap.createScaledBitmap(firstImage, canvasWidth, canvasHeight, false);
-        return (new VisibilityEntry(convertBitmaptoSlide(nre, id).getAbsolutePath(), imageType, id));
+        return convertBitmaptoSlide(nre, images);
     }
 
     /**
@@ -307,20 +318,37 @@ public class PrepareMedia {
         boolean oddImageCount = false;
         Random r = new Random();
         mNumberOfLocalOfferImages = localOfferImagesList.size();
-        if (mNumberOfLocalOfferImages % 2 != 0)
+        if(mNumberOfLocalOfferImages % 2 == 0){
             oddImageCount = true;
-        for (i = 0; i < mNumberOfLocalOfferImages; i += 2) {
+        }
+        Collections.sort(localOfferImagesList, new SortBySlotNumber());
+
+        for (i = 0; i < mNumberOfLocalOfferImages; i+= 2) {
             if ((oddImageCount == true) && (i == 0)) {
-                mergedImageList.add(resizeImages(localOfferImagesList.get(i), LOCAL_PRODUCT_IMAGE_TYPE, localOfferImagesList.get(i).getImageID()));
+                mergedImageList.add(resizeImages(localOfferImagesList.get(i)));
                 i += 1;
             }
             VisibilityEntry first = localOfferImagesList.get(i);
             VisibilityEntry second = localOfferImagesList.get((i + 1));
-            Bitmap firstImage = BitmapFactory.decodeFile(first.getImagePath());
-            Bitmap secondImage = BitmapFactory.decodeFile(second.getImagePath());
+            Bitmap firstImage = BitmapFactory.decodeFile(first.getCampaignDataPath());
+            Bitmap secondImage = BitmapFactory.decodeFile(second.getCampaignDataPath());
             Bitmap mergedImages = createSingleImageFrom2Images(firstImage, secondImage);
-            mergedImageList.add(new VisibilityEntry(convertBitmaptoSlide(mergedImages, i).getAbsolutePath(), LOCAL_PRODUCT_IMAGE_TYPE, r.nextInt(200)));
+            mergedImageList.add((convertBitmaptoSlide(mergedImages, first)));
         }
+//        if (mNumberOfLocalOfferImages % 2 != 0 )
+//            oddImageCount = true;
+//        for (i = 0; i < mNumberOfLocalOfferImages; i += 2) {
+//            if ((oddImageCount == true) && (i == 0)) {
+//                mergedImageList.add(resizeImages(localOfferImagesList.get(i), LOCAL_PRODUCT_IMAGE_TYPE, localOfferImagesList.get(i).getCampaignID()));
+//                i += 1;
+//            }
+//            VisibilityEntry first = localOfferImagesList.get(i);
+//            VisibilityEntry second = localOfferImagesList.get((i + 1));
+//            Bitmap firstImage = BitmapFactory.decodeFile(first.getCampaignDataPath());
+//            Bitmap secondImage = BitmapFactory.decodeFile(second.getCampaignDataPath());
+//            Bitmap mergedImages = createSingleImageFrom2Images(firstImage, secondImage);
+//            mergedImageList.add(new VisibilityEntry(convertBitmaptoSlide(mergedImages, i).getAbsolutePath(), LOCAL_PRODUCT_IMAGE_TYPE, r.nextInt(200)));
+//        }
         return mergedImageList;
     }
 
@@ -382,14 +410,15 @@ public class PrepareMedia {
     /**
      * converting image formed by merging two local images into slide/file
      **/
-    public File convertBitmaptoSlide(Bitmap image, int slideNo) {
-        String root = Environment.getExternalStorageDirectory().getAbsolutePath() + "/";
-        final String tempMergedDirName = "mergedImages";
-        final File imageTemp = new File(Environment.getExternalStorageDirectory(), tempMergedDirName);
+    public VisibilityEntry convertBitmaptoSlide(Bitmap image, VisibilityEntry entry) {
+//        String root = Environment.getExternalStorageDirectory().getAbsolutePath() + "/";
+//        final String tempMergedDirName = "mergedImages";
+//        final File imageTemp = new File(Environment.getExternalStorageDirectory(), tempMergedDirName);
+        File imageTemp = new File(entry.getCampaignDataPath());
         if (!imageTemp.exists()) {
             imageTemp.mkdirs();
         }
-        File f = new File(imageTemp, "mergedfile_" + slideNo + ".jpeg");
+        File f = new File(imageRoot, "mergedfile_" + entry.getCampaignID() + ".jpeg");
         try {
             f.createNewFile();
         } catch (IOException e) {
@@ -413,7 +442,10 @@ public class PrepareMedia {
         } catch (IOException e) {
             System.out.println(e);
         }
-        return f;
+        // updated filepath
+        entry.setCampaignDataPath(f.getAbsolutePath());
+
+        return entry;
     }
 
     /**
@@ -433,7 +465,7 @@ public class PrepareMedia {
         for (VisibilityEntry temp : slides) {
 
             String newFileName = "slide_" + (++i) + ".jpeg";
-            File sourceSlide = new File(temp.getImagePath());
+            File sourceSlide = new File(temp.getCampaignDataPath());
             File destSlide = new File(imageRoot, newFileName);
             long fileSize = Integer.parseInt(String.valueOf(sourceSlide.length() / 1024));
 
@@ -468,120 +500,126 @@ public class PrepareMedia {
         //deleteRecursive(new File(root + "campaignImages"));
     }
 
-    private void record(Context context) {
-
-        if(!videoRoot.exists()){
-            videoRoot.mkdir();
-        }
-        String video_output = videoRoot.getAbsolutePath().toString() + "/" + "CampaignSlideShow" + ".mp4";
-        String path = Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay"; // You can provide SD Card path here.
-        deleteVideofromGallery(video_output, context);
-        File folder = new File(path);
-        File[] listOfFiles = folder.listFiles();
-        opencv_core.IplImage iplimage = null;
-        FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270,720,2);
-        OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
-
-        if (listOfFiles.length > 0) {
-            try {
-                recorder.setVideoCodec(13);// CODEC_ID_MPEG4 //CODEC_ID_MPEG1VIDEO
-                recorder.setFormat("mp4");
-                //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
-                recorder.setFrameRate(25); // This is the frame rate for video. If you really want to have good video quality you need to provide large set of images.
-                recorder.setPixelFormat(0); // PIX_FMT_YUV420P
-
-                int slideTime = SettingActivity.getSlideTime(mContext);
-                int numbOfRepeat = MAX_DURATION__OF_VIDEO/(listOfFiles.length*slideTime);
-                recorder.start();
-                long startTime = System.currentTimeMillis();
-                for (int j = 0; j < listOfFiles.length; j++ ) {
-                    String files = "";
-                    if (listOfFiles[j].isFile()) {
-                        files = listOfFiles[j].getName();
-                        System.out.println(" j " + j + listOfFiles[j]);
-                    }
-                    String[] tokens = files.split("\\.(?=[^\\.]+$)");
-                    String name = tokens[0];
-                    opencv_core.IplImage iplImage = cvLoadImage(Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay/" + name + ".jpeg");
-                    Frame slideFrame = imgToFrame.convert(iplImage);
-                    //for (int i = 0; i < slideTime*25; i++) {
-                    long time = 12500L * (System.currentTimeMillis() - startTime);
-                    if (time > recorder.getTimestamp()) {
-                        recorder.setTimestamp(time);
-                        recorder.record(slideFrame);
-                    }
-                    //}
-                    cvReleaseImage(iplImage);
-                    iplImage.release();
-                }
-                recorder.stop();
-                recorder.release();
-                addVideoToGallery(video_output, "CampaignSlideShow", context);
-            } catch (FFmpegFrameRecorder.Exception e) {
-                e.printStackTrace();
-                System.out.println(e);
-                Toast.makeText(context,"Cannot create the video. Please try again later.",Toast.LENGTH_SHORT);
-            }finally {
-                System.gc();
-                Pointer.deallocateReferences();
-            }
-        }
-    }
+//    private void record(Context context) {
+//
+//        if(!videoRoot.exists()){
+//            videoRoot.mkdir();
+//        }
+//        String video_output = videoRoot.getAbsolutePath().toString() + "/" + "CampaignSlideShow" + ".mp4";
+//        String path = Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay"; // You can provide SD Card path here.
+//        deleteVideofromGallery(video_output, context);
+//        File folder = new File(path);
+//        File[] listOfFiles = folder.listFiles();
+//        opencv_core.IplImage iplimage = null;
+//        FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270,720,2);
+//        OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
+//
+//        if (listOfFiles.length > 0) {
+//            try {
+//                recorder.setVideoCodec(13);// CODEC_ID_MPEG4 //CODEC_ID_MPEG1VIDEO
+//                recorder.setFormat("mp4");
+//                //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
+//                recorder.setFrameRate(25); // This is the frame rate for video. If you really want to have good video quality you need to provide large set of images.
+//                recorder.setPixelFormat(0); // PIX_FMT_YUV420P
+//
+//                int slideTime = SettingActivity.getSlideTime(mContext);
+//                int numbOfRepeat = MAX_DURATION__OF_VIDEO/(listOfFiles.length*slideTime);
+//                recorder.start();
+//                long startTime = System.currentTimeMillis();
+//                for (int j = 0; j < listOfFiles.length; j++ ) {
+//                    String files = "";
+//                    if (listOfFiles[j].isFile()) {
+//                        files = listOfFiles[j].getName();
+//                        System.out.println(" j " + j + listOfFiles[j]);
+//                    }
+//                    String[] tokens = files.split("\\.(?=[^\\.]+$)");
+//                    String name = tokens[0];
+//                    opencv_core.IplImage iplImage = cvLoadImage(Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay/" + name + ".jpeg");
+//                    Frame slideFrame = imgToFrame.convert(iplImage);
+//                    //for (int i = 0; i < slideTime*25; i++) {
+//                    long time = 12500L * (System.currentTimeMillis() - startTime);
+//                    if (time > recorder.getTimestamp()) {
+//                        recorder.setTimestamp(time);
+//                        recorder.record(slideFrame);
+//                    }
+//                    //}
+//                    cvReleaseImage(iplImage);
+//                    iplImage.release();
+//                }
+//                recorder.stop();
+//                recorder.release();
+//                addVideoToGallery(video_output, "CampaignSlideShow", context);
+//            } catch (FFmpegFrameRecorder.Exception e) {
+//                e.printStackTrace();
+//                System.out.println(e);
+//                Toast.makeText(context,"Cannot create the video. Please try again later.",Toast.LENGTH_SHORT);
+//            }finally {
+//                System.gc();
+//                Pointer.deallocateReferences();
+//            }
+//        }
+//    }
 
     /**
      * Combining the campaign videos and campaign slides all together in one video
      **/
     public void combineClipsAndVideos(){
         try{
-            String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
+//            String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
             String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
-            File[] listOfVideoFiles= new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
-            if(listOfVideoFiles.length < 1)
-                return;
+//            File[] listOfVideoFiles= new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
+//            if(listOfVideoFiles.length < 1)
+//                return;
+
+            ArrayList<VisibilityEntry> mFinalCampaignToBeDisplayed = new ArrayList<VisibilityEntry>();
+            mFinalCampaignToBeDisplayed.addAll(mCampaignSlides);
+            mFinalCampaignToBeDisplayed.addAll(mCampaignVideos);
+            Collections.sort(mFinalCampaignToBeDisplayed,new SortBySlotNumber());
+
 
             List<FrameGrabber> fgs = new ArrayList<FrameGrabber>();
-            for(File f : listOfVideoFiles)
-            {
-                FrameGrabber grabber = new FFmpegFrameGrabber(f);
-                grabber.start();
-                fgs.add(grabber);
-            }
-            String path = Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay"; // You can provide SD Card path here.
-            File folder = new File(path);
-            File[] listOfFiles = folder.listFiles();
-            OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
-
-            //slidesToVideo
-            int slideTime = SettingActivity.getSlideTime(mContext);
-            FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270, 720,2);
-            recorder.setVideoCodec(13);
-            recorder.setFormat("mp4");
-            //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
-            recorder.setFrameRate(25); // This is the frame rate for video. If you really want to have good video quality you need to provide large set of images.
-            recorder.setPixelFormat(0); // PIX_FMT_YUV420P
-            recorder.start();
-            Frame frame;
-            for(FrameGrabber fg : fgs)
-            {
-                while ((frame = fg.grabFrame()) != null) {
-                    recorder.record(frame);
-                }
-                fg.stop();
-            }
-            long startTime = System.currentTimeMillis();
-            for (int j = 0; j < listOfFiles.length; j++ ) {
-                opencv_core.IplImage iplImage = cvLoadImage(listOfFiles[j].getAbsolutePath());
-                Frame slideFrame = imgToFrame.convert(iplImage);
-                long time = 12500L * (System.currentTimeMillis() - startTime);
-                if (time > recorder.getTimestamp()) {
-                    recorder.setTimestamp(time);
-                    recorder.record(slideFrame);
-                }
-                cvReleaseImage(iplImage);
-                iplImage.release();
-            }
-            recorder.stop();
-            recorder.release();
+//            for(File f : listOfVideoFiles)
+//            {
+//                FrameGrabber grabber = new FFmpegFrameGrabber(f);
+//                grabber.start();
+//                fgs.add(grabber);
+//            }
+//            String path = Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay"; // You can provide SD Card path here.
+//            File folder = new File(path);
+//            File[] listOfFiles = folder.listFiles();
+//            OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
+//
+//            //slidesToVideo
+//            int slideTime = SettingActivity.getSlideTime(mContext);
+//            FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 1270, 720,2);
+//            recorder.setVideoCodec(13);
+//            recorder.setFormat("mp4");
+//            //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
+//            recorder.setFrameRate(25); // This is the frame rate for video. If you really want to have good video quality you need to provide large set of images.
+//            recorder.setPixelFormat(0); // PIX_FMT_YUV420P
+//            recorder.start();
+//            Frame frame;
+//            for(FrameGrabber fg : fgs)
+//            {
+//                while ((frame = fg.grabFrame()) != null) {
+//                    recorder.record(frame);
+//                }
+//                fg.stop();
+//            }
+//            long startTime = System.currentTimeMillis();
+//            for (int j = 0; j < listOfFiles.length; j++ ) {
+//                opencv_core.IplImage iplImage = cvLoadImage(listOfFiles[j].getAbsolutePath());
+//                Frame slideFrame = imgToFrame.convert(iplImage);
+//                long time = 12500L * (System.currentTimeMillis() - startTime);
+//                if (time > recorder.getTimestamp()) {
+//                    recorder.setTimestamp(time);
+//                    recorder.record(slideFrame);
+//                }
+//                cvReleaseImage(iplImage);
+//                iplImage.release();
+//            }
+//            recorder.stop();
+//            recorder.release();
         } catch(Exception ex) {
             ex.printStackTrace();
         }
@@ -768,13 +806,17 @@ public class PrepareMedia {
     public void prepareCampaignVideos() {
         //TODO:fetch the campaign videos
         try {
-            String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
-            File[] listOfVideoFiles = new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
-            if (listOfVideoFiles.length < 1)
+            //String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignData";
+            //File[] listOfVideoFiles = new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
+//            if (listOfVideoFiles.length < 1)
+//                return;
+            if(mCampaignVideos.size() < 1 ){
                 return;
+            }
             //removing the audio
-            for (int i = 0; i < listOfVideoFiles.length; i++) {
-                Movie videoMovie = MovieCreator.build(listOfVideoFiles[i].getAbsolutePath());
+            //for (int i = 0; i < listOfVideoFiles.length; i++) {
+              for(VisibilityEntry videoEntry : mCampaignVideos){
+                Movie videoMovie = MovieCreator.build(videoEntry.getCampaignDataPath());
                 Movie output = new Movie();
                 for (Track t : videoMovie.getTracks()) {
 
@@ -787,7 +829,7 @@ public class PrepareMedia {
                     }
                 }
                 Container out = new DefaultMp4Builder().build(output);
-                FileChannel fc = new RandomAccessFile((listOfVideoFiles[i].getAbsolutePath()), "rw").getChannel();
+                FileChannel fc = new RandomAccessFile((videoEntry.getCampaignDataPath()), "rw").getChannel();
                 out.writeContainer(fc);
                 fc.close();
             }
@@ -806,5 +848,15 @@ public class PrepareMedia {
             audioRoot.mkdir();
         }
         //TODO:fetch the campaign audios
+    }
+
+    class SortBySlotNumber implements Comparator<VisibilityEntry>
+    {
+        // Used for sorting in ascending order of
+        // slot number
+        public int compare(VisibilityEntry a, VisibilityEntry b)
+        {
+            return a.getSlotNumber() - b.getSlotNumber();
+        }
     }
 }
