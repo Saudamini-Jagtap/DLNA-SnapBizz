@@ -318,7 +318,7 @@ public class PrepareMedia {
         boolean oddImageCount = false;
         Random r = new Random();
         mNumberOfLocalOfferImages = localOfferImagesList.size();
-        if(mNumberOfLocalOfferImages % 2 == 0){
+        if(mNumberOfLocalOfferImages % 2 != 0){
             oddImageCount = true;
         }
         Collections.sort(localOfferImagesList, new SortBySlotNumber());
@@ -806,32 +806,33 @@ public class PrepareMedia {
     public void prepareCampaignVideos() {
         //TODO:fetch the campaign videos
         try {
-            //String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignData";
+            String intermediateVideoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
             //File[] listOfVideoFiles = new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
 //            if (listOfVideoFiles.length < 1)
 //                return;
-            if(mCampaignVideos.size() < 1 ){
+            if (mCampaignVideos.size() < 1) {
                 return;
             }
             //removing the audio
             //for (int i = 0; i < listOfVideoFiles.length; i++) {
-              for(VisibilityEntry videoEntry : mCampaignVideos){
-                Movie videoMovie = MovieCreator.build(videoEntry.getCampaignDataPath());
-                Movie output = new Movie();
-                for (Track t : videoMovie.getTracks()) {
+            for (VisibilityEntry videoEntry : mCampaignVideos) {
 
-                    if (t.getHandler().equals("vide")) {
-                        output.addTrack(new AppendTrack(t));
-                    }
+            Movie videoMovie = MovieCreator.build(videoEntry.getCampaignDataPath());
+            Movie output = new Movie();
+            for (Track t : videoMovie.getTracks()) {
 
-                    if (t.getHandler().equals("soun")) {
-                        output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 50)));
-                    }
+                if (t.getHandler().equals("vide")) {
+                    output.addTrack(new AppendTrack(t));
                 }
-                Container out = new DefaultMp4Builder().build(output);
-                FileChannel fc = new RandomAccessFile((videoEntry.getCampaignDataPath()), "rw").getChannel();
-                out.writeContainer(fc);
-                fc.close();
+
+                if (t.getHandler().equals("soun")) {
+                    output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 50)));
+                }
+            }
+            Container out = new DefaultMp4Builder().build(output);
+            FileChannel fc = new RandomAccessFile(intermediateVideoPath + "/imtermediateVideo_" + videoEntry.getCampaignID() + ".mp4", "rw").getChannel();
+            out.writeContainer(fc);
+            fc.close();
             }
         }
         catch (Exception ex){
