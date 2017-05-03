@@ -52,6 +52,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
+import static com.zxt.dlna.util.CommonUtil.deleteRecursive;
 import static org.bytedeco.javacpp.opencv_core.cvReleaseImage;
 import static org.bytedeco.javacpp.opencv_imgcodecs.cvLoadImage;
 
@@ -458,7 +459,7 @@ public class PrepareMedia {
             imageRoot.mkdirs();
         } else {
             for (File child : imageRoot.listFiles()) {
-                CommonUtil.deleteRecursive(child);
+                deleteRecursive(child);
                 deleteImagefromGallery(child, context);
             }
         }
@@ -495,7 +496,7 @@ public class PrepareMedia {
             }
         }
 
-        CommonUtil.deleteRecursive(new File(root + "mergedImages"));
+        //deleteRecursive(new File(root + "mergedImages"));
         //remove when images imported from the Snap-billing application
         //deleteRecursive(new File(root + "campaignImages"));
     }
@@ -576,8 +577,49 @@ public class PrepareMedia {
             mFinalCampaignToBeDisplayed.addAll(mCampaignVideos);
             Collections.sort(mFinalCampaignToBeDisplayed,new SortBySlotNumber());
 
+            String path = Environment.getExternalStorageDirectory().getPath() + "/campaignSlidesToDisplay"; // You can provide SD Card path here.
+            File folder = new File(path);
+            File[] listOfFiles = folder.listFiles();
+            OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
+            int slideTime = SettingActivity.getSlideTime(mContext);
+            Frame frame;
+            FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 640,480/*1270, 720*/,2);
+            recorder.setVideoCodec(13);
+            recorder.setFormat("mp4");
+            //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
+            recorder.setFrameRate(25); // This is the frame rate for video. If you really want to have good video quality you need to provide large set of images.
+            recorder.setPixelFormat(0); // PIX_FMT_YUV420P
+            recorder.start();
+            long startTime = System.currentTimeMillis();
+            for(VisibilityEntry campaignData : mFinalCampaignToBeDisplayed){
+                if(campaignData.getCampaignDataPath().contains(".mp4")){
+                    FrameGrabber grabber = new FFmpegFrameGrabber(new File(campaignData.getCampaignDataPath()));
+                    grabber.start();
+                    while ((frame = grabber.grabFrame()) != null) {
+                        long timeStamp = grabber.getTimestamp();
+                        recorder.setTimestamp(timeStamp);
+                        recorder.record(frame);
+                    }
+                    grabber.flush();
+                    grabber.stop();
+                }
+                else if(campaignData.getCampaignDataPath().contains(".jpeg")){
 
-            List<FrameGrabber> fgs = new ArrayList<FrameGrabber>();
+                    opencv_core.IplImage iplImage = cvLoadImage(campaignData.getCampaignDataPath());
+                    frame = imgToFrame.convert(iplImage);
+                    long time = 12500L * (System.currentTimeMillis() - startTime);
+                    if (time > recorder.getTimestamp()) {
+                        recorder.setTimestamp(time);
+                        recorder.record(frame);
+                    }
+                    cvReleaseImage(iplImage);
+                    iplImage.release();
+                }
+            }
+            recorder.stop();
+            recorder.release();
+
+//            List<FrameGrabber> fgs = new ArrayList<FrameGrabber>();
 //            for(File f : listOfVideoFiles)
 //            {
 //                FrameGrabber grabber = new FFmpegFrameGrabber(f);
@@ -813,26 +855,33 @@ public class PrepareMedia {
             if (mCampaignVideos.size() < 1) {
                 return;
             }
+            File intermediateFolder = new File(intermediateVideoPath);
+            CommonUtil.deleteRecursive(intermediateFolder);
+            if(!intermediateFolder.exists()){
+                intermediateFolder.mkdir();
+            }
             //removing the audio
             //for (int i = 0; i < listOfVideoFiles.length; i++) {
             for (VisibilityEntry videoEntry : mCampaignVideos) {
 
-            Movie videoMovie = MovieCreator.build(videoEntry.getCampaignDataPath());
-            Movie output = new Movie();
-            for (Track t : videoMovie.getTracks()) {
+                Movie videoMovie = MovieCreator.build(videoEntry.getCampaignDataPath());
+                Movie output = new Movie();
+                for (Track t : videoMovie.getTracks()) {
 
-                if (t.getHandler().equals("vide")) {
-                    output.addTrack(new AppendTrack(t));
-                }
+                    if (t.getHandler().equals("vide")) {
+                        output.addTrack(new AppendTrack(t));
+                    }
 
-                if (t.getHandler().equals("soun")) {
-                    output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 50)));
+                    if (t.getHandler().equals("soun")) {
+                        output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 30)));
+                    }
                 }
-            }
-            Container out = new DefaultMp4Builder().build(output);
-            FileChannel fc = new RandomAccessFile(intermediateVideoPath + "/imtermediateVideo_" + videoEntry.getCampaignID() + ".mp4", "rw").getChannel();
-            out.writeContainer(fc);
-            fc.close();
+                Container out = new DefaultMp4Builder().build(output);
+
+                FileChannel fc = new RandomAccessFile(intermediateVideoPath + "/imtermediateVideo_" + videoEntry.getCampaignID() + ".mp4", "rw").getChannel();
+                out.writeContainer(fc);
+                fc.close();
+                videoEntry.setCampaignDataPath(intermediateVideoPath + "/imtermediateVideo_" + videoEntry.getCampaignID() + ".mp4");
             }
         }
         catch (Exception ex){
