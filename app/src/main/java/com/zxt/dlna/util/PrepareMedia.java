@@ -591,12 +591,13 @@ public class PrepareMedia {
             recorder.setPixelFormat(0); // PIX_FMT_YUV420P
             recorder.start();
             long startTime = System.currentTimeMillis();
+            long timeStamp = 0;
             for(VisibilityEntry campaignData : mFinalCampaignToBeDisplayed){
                 if(campaignData.getCampaignDataPath().contains(".mp4")){
                     FrameGrabber grabber = new FFmpegFrameGrabber(new File(campaignData.getCampaignDataPath()));
                     grabber.start();
                     while ((frame = grabber.grabFrame()) != null) {
-                        long timeStamp = grabber.getTimestamp();
+                        timeStamp = (System.currentTimeMillis() - startTime) + 400000L;//grabber.getTimestamp();
                         recorder.setTimestamp(timeStamp);
                         recorder.record(frame);
                     }
@@ -607,9 +608,9 @@ public class PrepareMedia {
 
                     opencv_core.IplImage iplImage = cvLoadImage(campaignData.getCampaignDataPath());
                     frame = imgToFrame.convert(iplImage);
-                    long time = 12500L * (System.currentTimeMillis() - startTime);
-                    if (time > recorder.getTimestamp()) {
-                        recorder.setTimestamp(time);
+                    timeStamp = 12500L * (System.currentTimeMillis() - startTime);
+                    if (timeStamp > recorder.getTimestamp()) {
+                        recorder.setTimestamp(timeStamp);
                         recorder.record(frame);
                     }
                     cvReleaseImage(iplImage);
