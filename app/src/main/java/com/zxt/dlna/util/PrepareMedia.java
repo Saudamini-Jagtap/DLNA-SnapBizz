@@ -597,8 +597,6 @@ public class PrepareMedia {
                     FrameGrabber grabber = new FFmpegFrameGrabber(new File(campaignData.getCampaignDataPath()));
                     grabber.start();
                     while ((frame = grabber.grabFrame()) != null) {
-                        timeStamp = (System.currentTimeMillis() - startTime) + 400000L;//grabber.getTimestamp();
-                        recorder.setTimestamp(timeStamp);
                         recorder.record(frame);
                     }
                     grabber.flush();
@@ -608,11 +606,15 @@ public class PrepareMedia {
 
                     opencv_core.IplImage iplImage = cvLoadImage(campaignData.getCampaignDataPath());
                     frame = imgToFrame.convert(iplImage);
-                    timeStamp = 12500L * (System.currentTimeMillis() - startTime);
-                    if (timeStamp > recorder.getTimestamp()) {
+                    if(timeStamp ==0){
+                        timeStamp = 12500L * (System.currentTimeMillis() - startTime);
+                    }
+                    else if (timeStamp > recorder.getTimestamp() ) {
+                        timeStamp = 12500L * (System.currentTimeMillis() - startTime);
                         recorder.setTimestamp(timeStamp);
                         recorder.record(frame);
                     }
+
                     cvReleaseImage(iplImage);
                     iplImage.release();
                 }
