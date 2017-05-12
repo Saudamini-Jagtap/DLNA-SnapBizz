@@ -592,7 +592,15 @@ public class PrepareMedia {
             recorder.start();
             long startTime = System.currentTimeMillis();
             long timeStamp = 0;
+            opencv_core.IplImage iplImage[] = null;
+            for(int i =0; i<mFinalCampaignToBeDisplayed.size();i++) {
+                if(mFinalCampaignToBeDisplayed.get(i).getCampaignDataPath().contains(".jpeg")) {
+                    iplImage[i] = cvLoadImage(mFinalCampaignToBeDisplayed.get(i).getCampaignDataPath());
+                }
+            }
             for(VisibilityEntry campaignData : mFinalCampaignToBeDisplayed){
+
+                int i=0;
                 if(campaignData.getCampaignDataPath().contains(".mp4")){
                     FrameGrabber grabber = new FFmpegFrameGrabber(new File(campaignData.getCampaignDataPath()));
                     grabber.start();
@@ -604,8 +612,9 @@ public class PrepareMedia {
                 }
                 else if(campaignData.getCampaignDataPath().contains(".jpeg")){
 
-                    opencv_core.IplImage iplImage = cvLoadImage(campaignData.getCampaignDataPath());
-                    frame = imgToFrame.convert(iplImage);
+                    //opencv_core.IplImage iplImage = cvLoadImage(campaignData.getCampaignDataPath());
+                    frame = imgToFrame.convert(iplImage[i]);
+
                     if(timeStamp ==0){
                         timeStamp = 12500L * (System.currentTimeMillis() - startTime);
                     }
@@ -614,9 +623,9 @@ public class PrepareMedia {
                         recorder.setTimestamp(timeStamp);
                         recorder.record(frame);
                     }
-
-                    cvReleaseImage(iplImage);
-                    iplImage.release();
+                    cvReleaseImage(iplImage[i]);
+                    iplImage[i].release();
+                    i++;
                 }
             }
             recorder.stop();
