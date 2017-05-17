@@ -133,6 +133,7 @@ public class PrepareMedia {
      **/
     public static final File audioRoot = new File(Environment.getExternalStorageDirectory(), "campaignAudiosToDisplay");
 
+    public  static final String combined_video = videoRoot.getAbsoluteFile().toString() + File.separator + "combined_output.mp4";
     /**
      * constructor
      **/
@@ -167,37 +168,49 @@ public class PrepareMedia {
         mAllCampaignDataList =  visibleCampaignEntry.getAllCampaignData();
         sortCampaignData(mAllCampaignDataList);
 
-        if(!imageRoot.exists() || imageRoot.listFiles().length <=0 )
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    prepareCampaignSlides(mContext);
-                    campaignSlidesReady = true;
-                    mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-                }
-            }).start();
+//        if(!imageRoot.exists() || imageRoot.listFiles().length <=0 )
+//            new Thread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    prepareCampaignSlides(mContext);
+//                    campaignSlidesReady = true;
+//                    mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+//                }
+//            }).start();
+//
+//        if(!videoRoot.exists() || videoRoot.listFiles().length <=0) {
+//            new Thread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    prepareCampaignVideos();
+//                    campaignVideosReady = true;
+//                    mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+//                }
+//            }).start();
+//        }
+//        if(!audioRoot.exists() || audioRoot.listFiles().length <=0) {
+//            new Thread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    prepareCampaignAudios();
+//                    campaignAudiosReady = true;
+//                    //TODO: uncomment when audio is required
+//                    //mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
+//                }
+//            }).start();
+//        }
+        if(!imageRoot.exists() || imageRoot.listFiles().length <=0 ){
+            prepareCampaignSlides(mContext);
+        }
 
         if(!videoRoot.exists() || videoRoot.listFiles().length <=0) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    prepareCampaignVideos();
-                    campaignVideosReady = true;
-                    mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-                }
-            }).start();
+            prepareCampaignVideos();
         }
         if(!audioRoot.exists() || audioRoot.listFiles().length <=0) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
                     prepareCampaignAudios();
-                    campaignAudiosReady = true;
-                    //TODO: uncomment when audio is required
-                    //mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-                }
-            }).start();
         }
+        combineClipsAndVideos();
+        append_videos(mContext);
     }
 
     /**
@@ -477,7 +490,6 @@ public class PrepareMedia {
             FileChannel destination = null;
             try {
                 source = new FileInputStream(sourceSlide).getChannel();
-
                 destination = new FileOutputStream(destSlide).getChannel();
                 if (destination != null && source != null) {
                     destination.transferFrom(source, 0, source.size());
@@ -495,12 +507,10 @@ public class PrepareMedia {
 
             }
         }
-
         //deleteRecursive(new File(root + "mergedImages"));
         //remove when images imported from the Snap-billing application
         //deleteRecursive(new File(root + "campaignImages"));
     }
-
 //    private void record(Context context) {
 //
 //        if(!videoRoot.exists()){
@@ -560,18 +570,16 @@ public class PrepareMedia {
 //            }
 //        }
 //    }
-
     /**
      * Combining the campaign videos and campaign slides all together in one video
      **/
     public void combineClipsAndVideos(){
         try{
 //            String videoPath = Environment.getExternalStorageDirectory().getPath() + "/campaignVideos";
-            String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
+            //String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "combined_output.mp4";
 //            File[] listOfVideoFiles= new File(videoPath.toString()).listFiles(); // You can provide SD Card path here.
 //            if(listOfVideoFiles.length < 1)
 //                return;
-
             ArrayList<VisibilityEntry> mFinalCampaignToBeDisplayed = new ArrayList<VisibilityEntry>();
             mFinalCampaignToBeDisplayed.addAll(mCampaignSlides);
             mFinalCampaignToBeDisplayed.addAll(mCampaignVideos);
@@ -583,7 +591,7 @@ public class PrepareMedia {
             OpenCVFrameConverter.ToIplImage imgToFrame = new OpenCVFrameConverter.ToIplImage();
             int slideTime = SettingActivity.getSlideTime(mContext);
             Frame frame;
-            FrameRecorder recorder = new FFmpegFrameRecorder(video_output, 640,480/*1270, 720*/,2);
+            FrameRecorder recorder = new FFmpegFrameRecorder(combined_video, 640,480/*1270, 720*/,2);
             recorder.setVideoCodec(13);
             recorder.setFormat("mp4");
             //http://stackoverflow.com/questions/14125758/javacv-ffmpegframerecorder-properties-explanation-needed
@@ -592,12 +600,7 @@ public class PrepareMedia {
             recorder.start();
             long startTime = System.currentTimeMillis();
             long timeStamp = 0;
-            opencv_core.IplImage iplImage[] = null;
-            for(int i =0; i<mFinalCampaignToBeDisplayed.size();i++) {
-                if(mFinalCampaignToBeDisplayed.get(i).getCampaignDataPath().contains(".jpeg")) {
-                    iplImage[i] = cvLoadImage(mFinalCampaignToBeDisplayed.get(i).getCampaignDataPath());
-                }
-            }
+            opencv_core.IplImage iplImage;
             for(VisibilityEntry campaignData : mFinalCampaignToBeDisplayed){
 
                 int i=0;
@@ -612,19 +615,20 @@ public class PrepareMedia {
                 }
                 else if(campaignData.getCampaignDataPath().contains(".jpeg")){
 
-                    //opencv_core.IplImage iplImage = cvLoadImage(campaignData.getCampaignDataPath());
-                    frame = imgToFrame.convert(iplImage[i]);
-
-                    if(timeStamp ==0){
-                        timeStamp = 12500L * (System.currentTimeMillis() - startTime);
-                    }
-                    else if (timeStamp > recorder.getTimestamp() ) {
-                        timeStamp = 12500L * (System.currentTimeMillis() - startTime);
-                        recorder.setTimestamp(timeStamp);
+                    iplImage = cvLoadImage(campaignData.getCampaignDataPath());
+                    frame = imgToFrame.convert(iplImage);
+//
+//                    if(timeStamp ==0){
+//                        timeStamp = 12500L * (System.currentTimeMillis() - startTime);
+//                    }else
+                    //if (timeStamp > recorder.getTimestamp() ) {
+                        //timeStamp = 12500L * (System.currentTimeMillis() - startTime);
+                    for(i=0; i< slideTime*25;i++) {
                         recorder.record(frame);
                     }
-                    cvReleaseImage(iplImage[i]);
-                    iplImage[i].release();
+                    //}
+                    cvReleaseImage(iplImage);
+                    iplImage.release();
                     i++;
                 }
             }
@@ -684,15 +688,15 @@ public class PrepareMedia {
      *  after combining the campaign slides and campaign videos
      **/
     public void append_videos(Context context){
-        String video_output = videoRoot.getAbsoluteFile().toString() + File.separator + "output.mp4";
-        File output_video = new File(video_output);
+        String final_long_video = videoRoot.getPath()+"/CAMPAIGN-VIDEO-FINAL.mp4";
+        File output_video = new File(combined_video);
         if(!output_video.exists())
             return;
         try{
             Movie output = new Movie();
             List<Track> videoTracks = new LinkedList<Track>();
             List<Track> audioTracks = new LinkedList<Track>();
-            for (int i=0;i<12;i++) {
+            for (int i=0;i<10;i++) {
                 Movie videoMovie = MovieCreator.build(output_video.getAbsolutePath());
                 for (Track t : videoMovie.getTracks()) {
                     if (t.getHandler().equals("vide")) {
@@ -710,12 +714,12 @@ public class PrepareMedia {
                 output.addTrack(new AppendTrack(audioTracks.toArray(new Track[audioTracks.size()])));
             }
             Container out = new DefaultMp4Builder().build(output);
-            FileChannel fc = new RandomAccessFile(String.format(videoRoot.getPath()+"/final.mp4"), "rw").getChannel();
+            FileChannel fc = new RandomAccessFile(String.format(final_long_video), "rw").getChannel();
             out.writeContainer(fc);
             fc.close();
 
             // adding to the application directory
-            addVideoToGallery(video_output, "CAMPAIGN-VIDEO-FINAL", context);
+            addVideoToGallery(final_long_video, "CAMPAIGN-VIDEO-FINAL", context);
         }
         catch(IOException ex){
             ex.printStackTrace();
@@ -885,7 +889,7 @@ public class PrepareMedia {
                     }
 
                     if (t.getHandler().equals("soun")) {
-                        output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 30)));
+                        output.addTrack(new AppendTrack(new CroppedTrack(t, 1, 5)));
                     }
                 }
                 Container out = new DefaultMp4Builder().build(output);
