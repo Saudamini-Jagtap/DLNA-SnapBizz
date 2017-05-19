@@ -141,23 +141,6 @@ public class PrepareMedia {
         this.mContext = context;
     }
 
-    private Handler mHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case CAMPAIGN_DATA_READY:
-                    if (campaignSlidesReady && campaignVideosReady /*&& campaignAudiosReady*/) {
-                        combineClipsAndVideos();
-                        append_videos(mContext);
-                        campaignSlidesReady = false;
-                        campaignVideosReady = false;
-                        campaignAudiosReady = false;
-                    }
-                    break;
-            }
-        }
-    };
-
     /**
      * Constructor
      **/
@@ -168,37 +151,6 @@ public class PrepareMedia {
         mAllCampaignDataList =  visibleCampaignEntry.getAllCampaignData();
         sortCampaignData(mAllCampaignDataList);
 
-//        if(!imageRoot.exists() || imageRoot.listFiles().length <=0 )
-//            new Thread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    prepareCampaignSlides(mContext);
-//                    campaignSlidesReady = true;
-//                    mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-//                }
-//            }).start();
-//
-//        if(!videoRoot.exists() || videoRoot.listFiles().length <=0) {
-//            new Thread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    prepareCampaignVideos();
-//                    campaignVideosReady = true;
-//                    mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-//                }
-//            }).start();
-//        }
-//        if(!audioRoot.exists() || audioRoot.listFiles().length <=0) {
-//            new Thread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    prepareCampaignAudios();
-//                    campaignAudiosReady = true;
-//                    //TODO: uncomment when audio is required
-//                    //mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-//                }
-//            }).start();
-//        }
         if(!imageRoot.exists() || imageRoot.listFiles().length <=0 ){
             prepareCampaignSlides(mContext);
         }
@@ -220,32 +172,9 @@ public class PrepareMedia {
 
         List<VisibilityEntry> mAllCampaignDataList = visibleCampaignEntry.getAllCampaignData();
         sortCampaignData(mAllCampaignDataList);
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                prepareCampaignSlides(mContext);
-                campaignSlidesReady = true;
-                mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-            }
-        }).start();
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                prepareCampaignVideos();
-                campaignVideosReady = true;
-                mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-            }
-        }).start();
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                prepareCampaignAudios();
-                campaignAudiosReady = true;
-                //TODO: uncomment when audio is required
-                //mHandler.sendEmptyMessage(CAMPAIGN_DATA_READY);
-            }
-        }).start();
+        prepareCampaignSlides(mContext);
+        prepareCampaignVideos();
+        prepareCampaignAudios();
     }
 
     /** fetching the campaign images from snapbilling application
@@ -795,9 +724,6 @@ public class PrepareMedia {
                 // File not found in media store DB
             }
             c.close();
-            //		} catch (IOException e) {
-            //
-            //		}
         }
     }
 
